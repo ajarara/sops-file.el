@@ -9,9 +9,10 @@ So we want whatever entry/exit mechanism (tramp, auto-mode-alist, a minor mode) 
 - override the read/save functionality
 - prompt the user for a PIN if needed[^1]
 
-We'll do this by using 'sops filestatus' to determine whether to run the yaml file through sops as part of a major mode hook. Then, if it hits, we'll decrypt, prompting if necessary, and run the decrypted file through sops. We also overwrite write-region for the buffer to save through piping buffer contents through sops.
+We'll do this by using 'sops filestatus' to determine whether to run the yaml file through sops as part of a major mode hook. Then, if it hits, we'll decrypt, prompting if necessary, and I think we'll use `major-mode-suspend` and redecide based off of contents/file-name[^2]. We also overwrite write-region for the buffer to save through piping buffer contents through sops.
 
 [^1]: Sops can use any number of credentials, the ones that are interesting to me are gpg/age keys. Gpg has pinentry, and while age has a pinentry capable implementation (rage), sops links against age as a library instead of a program (so no possibility of letting users work around it). However sops passes through pin requests, so we just have to also pass them through.
+[^2]: Because decrypted contents can be yaml, we can't blindly remove .yaml (or .yml or whatever). We could maybe go with "remove .yaml unless it's the only suffix" and let the user override with something more advanced..
 
 ## inspirations
 epa-file, [sops.el](https://github.com/djgoku/sops)

@@ -26,23 +26,28 @@
 
 ;;; Commentary:
 
-;; This package provides a major mode for manipulating the content of sops files transparently.
+;; This package provides for manipulating the content of sops files transparently.
 
 ;;; Code:
 
+(defgroup sops-file nil "Transparently manipulate SOPS files" :prefix 'sops-file :group 'convenience)
 
-(defcustom sops-executable "sops"
+(defcustom sops-file-executable "sops"
+  "Path to the sops executable."
   :group 'sops-file
-  :type string)
+  :type 'string)
 
-(defcustom sops-decrypt-args "sops"
+(defcustom sops-file-decrypt-args
+  `("-d")
+  "Decrypt arguments for sops."
   :group 'sops-file
   :type '(repeat string))
 
 
-(put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
 
-(put 'write-region 'sops-file 'sops-file-write-region)
+;; (put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
+
+;; (put 'write-region 'sops-file 'sops-file-write-region)
 
 
 (provide 'sops-file)

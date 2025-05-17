@@ -29,6 +29,7 @@
 ;; This package provides for manipulating the content of sops files transparently.
 
 ;;; Code:
+(require 'cl-lib)
 
 (defgroup sops-file nil "Transparently manipulate SOPS files" :prefix 'sops-file :group 'convenience)
 
@@ -43,7 +44,43 @@
   :group 'sops-file
   :type '(repeat string))
 
+(define-minor-mode sops-file-mode
+  "Minor mode for manipulating the content of sops files transparently."
+  :group 'sops-file :lighter " Sops"
+  (cond ((null sops-file-mode)
+         ;; remove yaml mode hook
+         ;; remove auto-mode-alist entry for .enc.yml
+         )
+        (t
+         ;; add yaml mode hook
+         ;; add auto-mode-alist entry for .enc.yml
+         )))
 
+
+(cl-pushnew
+ `(sops-file ,(purecopy "Transparently manipulate sops files")
+        nil
+        sops-file-decode
+        sops-file-encode
+        t
+        nil
+        t)
+ format-alist)
+
+(defun sops-file-is-applicable-p (path)
+  (with-temp-buffer
+    (save-excursion
+      (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
+    (alist-get 'encrypted (json-read-object))))
+         
+
+(defun sops-file-decode ())
+
+(defun sops-file-encode ())
+
+;; (define-derived-mode sops-file-mode fundamental-mode)
+;; 
+;; write-file-functions
 
 ;; (put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
 

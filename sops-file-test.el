@@ -21,7 +21,7 @@
 
 ;;; Commentary:
 
-;; Run with `emacs -batch -l ert -l sops-file-test.el -f ert-run-tests-batch-and-exit`
+;; Run with `make test`
 
 (require 'ert)
 (require 'yaml-mode)

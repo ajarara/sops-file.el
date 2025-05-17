@@ -56,15 +56,12 @@ my-key: my-value
           (with-temp-buffer
             (insert my-secrets.enc.yaml-contents)
             (write-file "my-secrets.enc.yaml")))
-         (secret-file
-          (expand-file-name "my-secrets.enc.yaml" tmp-dir))
+         (secret-file "my-secrets.enc.yaml")
          (result-code
-          (call-process "sops" nil nil nil "encrypt" "-i" secret-file))
-         )
+          (call-process "sops" nil nil nil "encrypt" "-i" secret-file)))
     (should (equal 0 result-code))
 
-    ;; (find-file-noselect secret-file)
-    (should (equal 1 yaml-mode))
-    (should (equal age-keygen-pair nil))))
+    (find-file secret-file)
+    (should (equal 'yaml-mode major-mode))))
 
 (provide 'sops-file-test)

@@ -1,0 +1,2 @@
+test/harness/straight/*
+!test/harness/straight/versions

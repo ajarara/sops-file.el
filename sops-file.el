@@ -60,9 +60,10 @@
   :group 'sops-file
   :type 'function)
 
-(define-minor-mode sops-file-mode
-  "Minor mode for manipulating the content of sops files transparently."
-  :group 'sops-file :lighter " Sops"
+(define-minor-mode sops-file-auto-mode
+  "Global minor mode for installing hooks"
+  :global t
+  :group 'sops-file
   (cond ((null sops-file-mode)
          ;; remove yaml mode hook
          ;; remove auto-mode-alist entry for .enc.yml
@@ -72,15 +73,19 @@
          ;; add auto-mode-alist entry for .enc.yml
          )))
 
+(define-minor-mode sops-file-mode
+  "Minor mode to indicate buffer is visiting a sops encrypted file")
 
+;; we do not unregister on auto-mode toggle since we don't
+;; register a regex
 (cl-pushnew
  `(sops-file ,(purecopy "Transparently manipulate sops files")
-        nil
-        sops-file-decode
-        sops-file-encode
-        t
-        nil
-        t)
+             nil
+             sops-file-decode
+             sops-file-encode
+             t
+             nil
+             t)
  format-alist)
 
 (defun sops-file-is-applicable-p (path)

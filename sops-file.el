@@ -84,8 +84,7 @@
              sops-file-decode
              sops-file-encode
              t
-             nil
-             t)
+             nil)
  format-alist)
 
 (defun sops-file-is-applicable-p (path)
@@ -93,33 +92,32 @@
     (save-excursion
       (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
     (alist-get 'encrypted (json-read-object))))
-         
 
 (defun sops-file-decode (from to)
-  (shell-command-on-region
-      from
-      to
-      (string-join
-       `(,sops-file-executable
-         ,@sops-file-decrypt-args
-         "--filename-override"
-         ,buffer-file-name)
-       " ")
-      (current-buffer))
-  (funcall sops-file-mode-inferrer)
+  (apply 'call-process-region
+         from
+         to
+         sops-file-executable
+         t
+         (current-buffer)
+         nil
+   `(,@sops-file-decrypt-args
+     "--filename-override"
+     ,buffer-file-name))
+  ;; (funcall sops-file-mode-inferrer)
   (point-max))
 
 (defun sops-file-encode (from to orig-buf)
-  (shell-command-on-region
-   from
-   to
-   (string-join
-    `(,sops-file-executable
-      ,@sops-file-encrypt-args
-      "--filename-override"
-      ,(buffer-file-name orig-buf))
-    " ")
-   (current-buffer))
+  (apply 'call-process-region
+         from
+         to
+         sops-file-executable
+         t
+   (current-buffer)
+   nil
+   `(,@sops-file-encrypt-args
+     "--filename-override"
+     ,(buffer-file-name orig-buf)))
   (point-max))
 
 ;; (define-derived-mode sops-file-mode fundamental-mode)

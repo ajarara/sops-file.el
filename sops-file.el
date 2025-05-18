@@ -45,6 +45,12 @@
   :group 'sops-file
   :type '(repeat string))
 
+(defcustom sops-file-encrypt-args
+  `("encrypt")
+  "Encrypt arguments for sops."
+  :group 'sops-file
+  :type '(repeat string))
+
 (defcustom sops-file-mode-inferrer
   (lambda ()
     (let* ((buffer-file-name
@@ -98,7 +104,21 @@
   (funcall sops-file-mode-inferrer)
   (point-max))
 
-(defun sops-file-encode (from to orig-buf))
+(defun sops-file-encode (from to orig-buf)
+  (let* ((orig-file-name
+          (with-current-buffer orig-buf
+            buffer-file-name)))
+    (shell-command-on-region
+     from
+     to
+     (string-join
+      `(,sops-file-executable
+        ,@sops-file-encrypt-args
+        "--filename-override"
+        ,orig-file-name)
+      " ")
+     (current-buffer)))
+    (point-max))
 
 ;; (define-derived-mode sops-file-mode fundamental-mode)
 ;; 

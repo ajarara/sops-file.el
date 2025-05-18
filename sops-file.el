@@ -105,20 +105,17 @@
   (point-max))
 
 (defun sops-file-encode (from to orig-buf)
-  (let* ((orig-file-name
-          (with-current-buffer orig-buf
-            buffer-file-name)))
-    (shell-command-on-region
-     from
-     to
-     (string-join
-      `(,sops-file-executable
-        ,@sops-file-encrypt-args
-        "--filename-override"
-        ,orig-file-name)
-      " ")
-     (current-buffer)))
-    (point-max))
+  (shell-command-on-region
+   from
+   to
+   (string-join
+    `(,sops-file-executable
+      ,@sops-file-encrypt-args
+      "--filename-override"
+      ,(buffer-file-name orig-buf))
+    " ")
+   (current-buffer))
+  (point-max))
 
 ;; (define-derived-mode sops-file-mode fundamental-mode)
 ;; 

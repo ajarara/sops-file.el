@@ -33,16 +33,26 @@
 
 (defgroup sops-file nil "Transparently manipulate SOPS files" :prefix 'sops-file :group 'convenience)
 
-(defcustom sops-file-executable "sops"
+(defcustom sops-file-executable
+  "sops"
   "Path to the sops executable."
   :group 'sops-file
   :type 'string)
 
 (defcustom sops-file-decrypt-args
-  `("-d")
+  `("decrypt")
   "Decrypt arguments for sops."
   :group 'sops-file
   :type '(repeat string))
+
+(defcustom sops-file-mode-inferrer
+  (lambda ()
+    (let* ((buffer-file-name
+            (string-replace ".enc" "" buffer-file-name)))
+      (normal-mode t)))
+  "Manipulate the mode of the file after decoding it"
+  :group 'sops-file
+  :type 'function)
 
 (define-minor-mode sops-file-mode
   "Minor mode for manipulating the content of sops files transparently."
@@ -74,9 +84,21 @@
     (alist-get 'encrypted (json-read-object))))
          
 
-(defun sops-file-decode ())
+(defun sops-file-decode (from to)
+  (shell-command-on-region
+      from
+      to
+      (string-join
+       `(,sops-file-executable
+         ,@sops-file-decrypt-args
+         "--filename-override"
+         ,buffer-file-name)
+       " ")
+      (current-buffer))
+  (funcall sops-file-mode-inferrer)
+  (point-max))
 
-(defun sops-file-encode ())
+(defun sops-file-encode (from to orig-buf))
 
 ;; (define-derived-mode sops-file-mode fundamental-mode)
 ;; 

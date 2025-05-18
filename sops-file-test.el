@@ -45,9 +45,10 @@ creation_rules:
     age: %s
 " (car age-keygen-pair)))
          (default-directory (make-temp-file "sops-file-test--read-file" t))
-         (my-secrets.enc.yaml-contents "
-my-key: my-value
-")
+         (identity-file (with-temp-file "identity.txt"
+                          (insert (cadr age-keygen-pair))
+                          (expand-file-name "identity.txt")))
+         (my-secrets.enc.yaml-contents "my-key: my-value\n")
          (_
           (with-temp-buffer
             (insert .sops.yaml-contents)
@@ -61,7 +62,10 @@ my-key: my-value
           (call-process "sops" nil nil nil "encrypt" "-i" secret-file)))
     (should (equal 0 result-code))
 
-    (find-file secret-file)
+    (setenv "SOPS_AGE_KEY_FILE" identity-file)
+    (format-find-file secret-file 'sops-file)
+    (should (equal (buffer-string) my-secrets.enc.yaml-contents))
     (should (equal 'yaml-mode major-mode))))
+
 
 (provide 'sops-file-test)

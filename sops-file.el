@@ -66,6 +66,13 @@
   :group 'sops-file
   (cond ((null sops-file-mode)
          ;; remove yaml mode hook
+         (add-hook 'yaml-mode-hook
+                   (lambda ()
+                     (when (sops-file-is-applicable-p buffer-file-name)
+                       (sops-file-decode (point-min) (point-max))
+                       (add-hook 'write-file-functions
+                                 (lambda))
+                       )))
          ;; remove auto-mode-alist entry for .enc.yml
          )
         (t
@@ -73,11 +80,6 @@
          ;; add auto-mode-alist entry for .enc.yml
          )))
 
-(define-minor-mode sops-file-mode
-  "Minor mode to indicate buffer is visiting a sops encrypted file")
-
-;; we do not unregister on auto-mode toggle since we don't
-;; register a regex
 (cl-pushnew
  `(sops-file ,(purecopy "Transparently manipulate sops files")
              nil
@@ -88,12 +90,15 @@
  format-alist)
 
 (defun sops-file-is-applicable-p (path)
-  (with-temp-buffer
-    (save-excursion
-      (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
-    (alist-get 'encrypted (json-read-object))))
+  (when path
+    (with-temp-buffer
+      (save-excursion
+        (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
+      (alist-get 'encrypted (json-read-object)))))
 
 (defun sops-file-decode (from to)
+  (unless (and (equal from (point-min)) (equal to (point-max)))
+    (error "Cannot handle partial decoding"))
   (apply 'call-process-region
          from
          to
@@ -101,33 +106,44 @@
          t
          (current-buffer)
          nil
-   `(,@sops-file-decrypt-args
-     "--filename-override"
-     ,buffer-file-name))
-  ;; (funcall sops-file-mode-inferrer)
+         `(,@sops-file-decrypt-args
+           "--filename-override"
+           ,buffer-file-name))
+  (funcall sops-file-mode-inferrer)
   (point-max))
+
 
 (defun sops-file-encode (from to orig-buf)
-  (apply 'call-process-region
-         from
-         to
-         sops-file-executable
-         t
-   (current-buffer)
-   nil
-   `(,@sops-file-encrypt-args
-     "--filename-override"
-     ,(buffer-file-name orig-buf)))
-  (point-max))
+  ;; manipulating the output buffer directly
+  ;; has proven pretty unreliable, this works
+  (let* ((output-buffer (current-buffer))
+         (transformed
+          (with-temp-buffer
+            (insert-buffer orig-buf)
+            (apply 'call-process-region
+                      from
+                      to
+                      sops-file-executable
+                      t
+                      t
+                      nil
+                      `(,@sops-file-encrypt-args
+                        "--filename-override"
+                        ,(buffer-file-name orig-buf)))
+            (buffer-string))))
+    (when (buffer-live-p (current-buffer))
+      (erase-buffer)
+      (insert transformed))
+    (point-max)))
 
-;; (define-derived-mode sops-file-mode fundamental-mode)
-;; 
-;; write-file-functions
+  ;; (define-derived-mode sops-file-mode fundamental-mode)
+  ;; 
+  ;; write-file-functions
 
-;; (put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
+  ;; (put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
 
-;; (put 'write-region 'sops-file 'sops-file-write-region)
+  ;; (put 'write-region 'sops-file 'sops-file-write-region)
 
 
-(provide 'sops-file)
+  (provide 'sops-file)
 ;;; sops-file.el ends here

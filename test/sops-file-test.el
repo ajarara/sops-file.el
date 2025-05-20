@@ -96,10 +96,11 @@ creation_rules:
 
 (ert-deftest sops-file-test--updates-are-saved ()
   (with-age-encrypted-file "opaque-name" "#!/usr/bin/env sh"
-    (format-find-file "opaque-name" 'sops-file)
-    (replace-string "sh" "awk")
-    (save-buffer)
-    (kill-buffer)
+    (save-current-buffer
+      (format-find-file "opaque-name" 'sops-file)
+      (replace-string "sh" "awk")
+      (save-buffer)
+      (kill-buffer))
     (format-find-file "opaque-name" 'sops-file)
     (should (equal major-mode 'awk-mode))))
 

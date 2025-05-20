@@ -25,6 +25,7 @@
 
 (require 'cl-lib)
 (require 'ert)
+(require 'ert-x)
 (require 'yaml-mode)
 (require 'conf-mode)
 (require 'sops-file)
@@ -128,7 +129,8 @@ creation_rules:
 
 (ert-deftest sops-file-test--passphrase-read-file ()
   (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"
-    (format-find-file "my-file.enc.yaml" 'sops-file)
+    (ert-simulate-keys sops-file-test-passphrase-key
+      (format-find-file "my-file.enc.yaml" 'sops-file))
     (should (equal (buffer-string) "key: value\n"))
     (should (equal major-mode 'yaml-mode))))
 

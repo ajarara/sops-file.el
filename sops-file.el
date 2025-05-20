@@ -92,32 +92,41 @@
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding"))
-  ;; (let* ((age-stdout (generate-new-buffer " age-stdout" t))
-  ;;        (age-stderr (generate-new-buffer " age-stderr" t))
-  ;;        (age (make-process
-  ;;              :name "sops"
-  ;;              :buffer age-stdout
-  ;;              :command `("sops"
-  ;;                         ,@sops-file-decrypt-args
-  ;;                         "--filename-override"
-  ;;                         ,buffer-file-name)
-  ;;              :stderr age-stderr
-  ;;              )))
-  ;;   ;; and now what? do we simply wait?
-  ;;   )
-  (apply 'call-process-region
-         from
-         to
-         sops-file-executable
-         t
-         (current-buffer)
-         nil
-         `(,@sops-file-decrypt-args
-           "--filename-override"
-           ,buffer-file-name))
+  (let* ((age-stdout (generate-new-buffer "age-stdout" t))
+         (age-stderr (generate-new-buffer "age-stderr" t))
+         (age (make-process
+               :name "sops"
+               :buffer age-stdout
+               :command `("sops"
+                          ,@sops-file-decrypt-args
+                          "--filename-override"
+                          ,buffer-file-name)
+               :stderr age-stderr
+               ;; suppress "Process sops finished" output
+               :sentinel 'ignore)))
+    (process-send-region age from to)
+    (process-send-eof age)
+    (accept-process-output age)
+    (with-current-buffer age-stderr
+      (if (re-search-forward
+             "Enter passphrase for identity" nil t)
+        (let ((passwd (read-passwd (buffer-string))))
+          (process-send-string
+           age
+           (format "%s\n" passwd)))))
+    
+    (while (not (equal (process-status age) 'exit))
+      (message
+       "stderr: %s\nstdout: %s"
+       (with-current-buffer age-stderr
+         (buffer-string))
+       (with-current-buffer age-stdout
+         (buffer-string)))
+      (accept-process-output age 3))
+    (erase-buffer)
+    (insert-buffer age-stdout))
   (funcall sops-file-mode-inferrer)
   (point-max))
-
 
 (defun sops-file-encode (from to orig-buf)
   ;; manipulating the output buffer directly

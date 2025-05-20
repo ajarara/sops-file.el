@@ -108,7 +108,7 @@
 
 (defun sops-file-encode (from to orig-buf)
   ;; manipulating the output buffer directly
-  ;; has proven pretty unreliable, this works
+  ;; has proven pretty unreliable, this works reliably
   (let* ((output-buffer (current-buffer))
          (transformed
           (with-temp-buffer
@@ -124,9 +124,8 @@
                         "--filename-override"
                         ,(buffer-file-name orig-buf)))
             (buffer-string))))
-    (when (buffer-live-p (current-buffer))
-      (erase-buffer)
-      (insert transformed))
+    (erase-buffer)
+    (insert transformed)
     (point-max)))
 
   ;; (define-derived-mode sops-file-mode fundamental-mode)

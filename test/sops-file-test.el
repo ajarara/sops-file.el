@@ -130,9 +130,6 @@ creation_rules:
   (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"
     (format-find-file "my-file.enc.yaml" 'sops-file)
     (should (equal (buffer-string) "key: value\n"))
-    (should (equal major-mode 'yaml-mode))
-  ))
-
-
+    (should (equal major-mode 'yaml-mode))))
 
 (provide 'sops-file-test)

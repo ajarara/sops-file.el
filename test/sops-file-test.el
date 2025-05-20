@@ -94,4 +94,13 @@ creation_rules:
     (should (equal (buffer-string) "#!/usr/bin/env sh"))
     (should (equal major-mode 'sh-mode))))
 
+(ert-deftest sops-file-test--updates-are-saved ()
+  (with-age-encrypted-file "opaque-name" "#!/usr/bin/env sh"
+    (format-find-file "opaque-name" 'sops-file)
+    (replace-string "sh" "awk")
+    (save-buffer)
+    (kill-buffer)
+    (format-find-file "opaque-name" 'sops-file)
+    (should (equal major-mode 'awk-mode))))
+
 (provide 'sops-file-test)

@@ -66,13 +66,6 @@
   :group 'sops-file
   (cond ((null sops-file-mode)
          ;; remove yaml mode hook
-         (add-hook 'yaml-mode-hook
-                   (lambda ()
-                     (when (sops-file-is-applicable-p buffer-file-name)
-                       (sops-file-decode (point-min) (point-max))
-                       (add-hook 'write-file-functions
-                                 (lambda))
-                       )))
          ;; remove auto-mode-alist entry for .enc.yml
          )
         (t

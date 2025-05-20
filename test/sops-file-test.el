@@ -26,7 +26,9 @@
 (require 'cl-lib)
 (require 'ert)
 (require 'yaml-mode)
+(require 'conf-mode)
 (require 'sops-file)
+
 
 (defun sops-file-test--generate-age-keys ()
     (with-temp-buffer
@@ -79,16 +81,19 @@ creation_rules:
           (_ (setenv "SOPS_AGE_KEY_FILE" (expand-file-name "identity.txt"))))
      ,@body
      (delete-directory ,test-dir-sym t))))
-     
 
 (setq sops-file-test--example-yaml "my-key: my-value\n")
 
 (ert-deftest sops-file-test--read-file ()
   (with-age-encrypted-file "my-file.enc.yaml" sops-file-test--example-yaml
-    
     (format-find-file "my-file.enc.yaml" 'sops-file)
-    
     (should (equal (buffer-string) sops-file-test--example-yaml))
-    (should (equal 'yaml-mode major-mode))))
+    (should (equal major-mode 'yaml-mode))))
+
+(ert-deftest sops-file-test--major-mode-respects-contents ()
+  (with-age-encrypted-file "opaque-name" "#!/usr/bin/env sh"
+    (format-find-file "opaque-name" 'sops-file)
+    (should (equal (buffer-string) "#!/usr/bin/env sh"))
+    (should (equal major-mode 'sh-mode))))
 
 (provide 'sops-file-test)

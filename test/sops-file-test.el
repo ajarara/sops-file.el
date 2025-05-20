@@ -82,12 +82,10 @@ creation_rules:
      ,@body
      (delete-directory ,test-dir-sym t))))
 
-(setq sops-file-test--example-yaml "my-key: my-value\n")
-
 (ert-deftest sops-file-test--read-file ()
-  (with-age-encrypted-file "my-file.enc.yaml" sops-file-test--example-yaml
+  (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
     (format-find-file "my-file.enc.yaml" 'sops-file)
-    (should (equal (buffer-string) sops-file-test--example-yaml))
+    (should (equal (buffer-string) "key: value\n"))
     (should (equal major-mode 'yaml-mode))))
 
 (ert-deftest sops-file-test--major-mode-respects-contents ()

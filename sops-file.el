@@ -92,6 +92,19 @@
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding"))
+  ;; (let* ((age-stdout (generate-new-buffer " age-stdout" t))
+  ;;        (age-stderr (generate-new-buffer " age-stderr" t))
+  ;;        (age (make-process
+  ;;              :name "sops"
+  ;;              :buffer age-stdout
+  ;;              :command `("sops"
+  ;;                         ,@sops-file-decrypt-args
+  ;;                         "--filename-override"
+  ;;                         ,buffer-file-name)
+  ;;              :stderr age-stderr
+  ;;              )))
+  ;;   ;; and now what? do we simply wait?
+  ;;   )
   (apply 'call-process-region
          from
          to

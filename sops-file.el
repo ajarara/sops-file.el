@@ -1,4 +1,4 @@
-;;; sops-file.el --- A major mode for sops encrypted files -*- lexical-binding: t; -*-
+;;; sops-file.el --- Transparently manipulate sops encrypted files -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Ahmad Jarara <ajarara@fastmail.com>
 

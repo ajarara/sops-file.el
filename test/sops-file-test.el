@@ -82,23 +82,27 @@ creation_rules:
           (,test-dir-sym (make-temp-file "sops-file-test--" t))
           (default-directory ,test-dir-sym)
           (,identity-file-sym (expand-file-name "identity.txt")))
-         (with-temp-file (expand-file-name "identity.txt")
-           (insert (cadr ,keys-sym)))
-       (with-temp-file (expand-file-name ".sops.yaml")
-         (insert ,sops-yaml-sym))
-       (let ((age (start-process "age" nil "age" "-p" "-o" ,relpath))
+     (with-temp-buffer
+       (let ((age (start-process "age" (current-buffer) "age" "-p" "-o" ,identity-file-sym))
              ;; passphrase, confirmation, contents
              (input (list sops-file-test-passphrase-key
                           sops-file-test-passphrase-key
-                          ,contents)))
+                          (cadr ,keys-sym))))
          (dolist (in input)
            (process-send-string age (format "%s\n" in)))
-         (process-send-eof age))
-       (setenv "SOPS_AGE_KEY_FILE" (expand-file-name "identity.txt"))
-       ,@body
-       ;; preserve directory on body failure, to aid debugging
-       (delete-directory ,test-dir-sym t)
-       )))
+         (process-send-eof age)
+         ;; simply wait until process-exit
+         (while (not (equal (process-status age) 'exit))
+           (accept-process-output age 3 nil nil))))
+     (with-temp-file (expand-file-name ".sops.yaml")
+       (insert ,sops-yaml-sym))
+     (with-temp-file ,relpath
+       (insert ,contents))
+     (process-lines "sops" "encrypt" "-i" ,relpath)
+     (setenv "SOPS_AGE_KEY_FILE" (expand-file-name "identity.txt"))
+     ,@body
+     ;; preserve directory on body failure, to aid debugging
+     (delete-directory ,test-dir-sym t))))
 
 (ert-deftest sops-file-test--read-file ()
   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
@@ -127,7 +131,7 @@ creation_rules:
     (format-find-file "my-file.enc.yaml" 'sops-file)
     (should (equal (buffer-string) "key: value\n"))
     (should (equal major-mode 'yaml-mode))
-    ))
+  ))
 
 
 

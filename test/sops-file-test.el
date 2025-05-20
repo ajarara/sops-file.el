@@ -47,15 +47,6 @@ creation_rules:
   - age: %s
 " public-key))
 
-;; there are three tested setups (and one untested, yubikeys, since they can't be automated):
-;; a file encrypted with an age key
-;; a file encrypted with a passphrase
-;; a file encrypted with an age key that is itself encrypted with a passphrase
-
-;; (defmacro with-age-encrypted-file)
-;; (defmacro with-age-passphrase-encrypted-file)
-;; (defmacro with-age-file-encrypted-with-passphrase-key)
-
 (defmacro with-age-encrypted-file (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym))
@@ -66,21 +57,50 @@ creation_rules:
           (,sops-yaml-sym (sops-file-test--yaml-for-key (car ,keys-sym)))
           (,test-dir-sym (make-temp-file "sops-file-test--" t))
           (default-directory ,test-dir-sym)
-          (,identity-file-sym
-           (with-temp-file (expand-file-name "identity.txt")
-             (insert (cadr ,keys-sym))))
-          (_
-           (with-temp-file (expand-file-name ".sops.yaml")
-             (insert ,sops-yaml-sym)))
-          (_
-           (with-temp-file ,relpath
-             (insert ,contents)))
-          (_
-           (process-lines
-            "sops" "encrypt" "-i" ,relpath))
-          (_ (setenv "SOPS_AGE_KEY_FILE" (expand-file-name "identity.txt"))))
+          (,identity-file-sym (expand-file-name "identity.txt")))
+     (with-temp-file ,identity-file-sym
+       (insert (cadr ,keys-sym)))
+     (with-temp-file (expand-file-name ".sops.yaml")
+       (insert ,sops-yaml-sym))
+     (with-temp-file ,relpath
+       (insert ,contents))
+     (process-lines "sops" "encrypt" "-i" ,relpath)
+     (setenv "SOPS_AGE_KEY_FILE" ,identity-file-sym)
+     (message (getenv "SOPS_AGE_KEY_FILE"))
      ,@body
      (delete-directory ,test-dir-sym t))))
+
+(defvar sops-file-test-passphrase-key "passphrase")
+
+;; (defmacro with-file-encrypted-with-passphrase-key (relpath contents &rest body)
+;;   (let ((keys-sym) (gensym)
+;;         (sops-yaml-sym (gensym))
+;;         (test-dir-sym (gensym))
+;;         (identity-file-sym (gensym))
+;;         (pass-sym (gensym)))
+;;     `(let* ((,keys-sym (sops-file-test--generate-age-keys))
+;;             (,sops-yaml-sym (sops-file-test--yaml-for-key (car ,keys-sym)))
+;;             (,test-dir-sym (make-temp-file "sops-file-test--" t))
+;;             (default-directory ,test-dir-sym)
+;;             (,identity-file-sym (expand-file-name "identity.txt")))
+;;        (with-temp-file (expand-file-name "identity.txt")
+;;          (insert (cadr ,keys-sym))))
+         
+;;     (with-temp-file (expand-file-name ".sops.yaml")
+;;       (insert ,sops-yaml-sym))
+
+;;     (let ((age (start-process "age" nil "age" "-p" "-o" ,relpath))
+;;           ;; passphrase, confirmation, contents
+;;           (input (list sops-file-test-passphrase-key
+;;                        sops-file-test-passphrase-key
+;;                        ,contents)))
+;;       (dolist (in input)
+;;         (process-send-string age (format "%s\n" in)))
+;;       (process-send-eof age))
+;;     (setenv "SOPS_AGE_KEY_FILE" (expand-file-name "identity.txt"))
+;;     ,@body
+;;     ;; preserve directory on body failure, to aid debugging
+;;     (delete-directory ,test-dir-sym t)))
 
 (ert-deftest sops-file-test--read-file ()
   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
@@ -103,5 +123,13 @@ creation_rules:
       (kill-buffer))
     (format-find-file "opaque-name" 'sops-file)
     (should (equal major-mode 'awk-mode))))
+
+;; (ert-deftest sops-file-test--passphrase-read-file ()
+;;   (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"
+;;     (format-find-file "my-file.enc.yaml" 'sops-file)
+;;     (should (equal (buffer-string) "key: value\n"))
+;;     (should (equal major-mode 'yaml-mode))))
+
+
 
 (provide 'sops-file-test)

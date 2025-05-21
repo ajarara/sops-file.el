@@ -101,6 +101,8 @@ creation_rules:
        (insert ,contents))
      (process-lines "sops" "encrypt" "-i" ,relpath)
      (setenv "SOPS_AGE_KEY_FILE" (expand-file-name "identity.txt"))
+     ;; disable gpg-agent pinentry
+     (setenv "GPG_AGENT_INFO" "")
      ,@body
      ;; preserve directory on body failure, to aid debugging
      (delete-directory ,test-dir-sym t))))

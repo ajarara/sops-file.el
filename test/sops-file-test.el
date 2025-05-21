@@ -107,6 +107,21 @@ creation_rules:
      ;; preserve directory on body failure, to aid debugging
      (delete-directory ,test-dir-sym t))))
 
+(defmacro with-yaml-mode-disabled (&rest body)
+  (declare (debug t) (indent defun))
+  (let ((yaml-mode-sym (gensym)))
+    `(let ((,yaml-mode-sym (symbol-function 'yaml-mode))
+            (auto-mode-alist
+             (cl-remove-if
+              (lambda (entry)
+                (equal (cdr entry) 'yaml-mode))
+              auto-mode-alist)))
+        (unwind-protect
+            (progn
+              (fmakunbound 'yaml-mode)
+              ,@body)
+          (fset 'yaml-mode ,yaml-mode-sym)))))
+
 (ert-deftest sops-file-test--read-file ()
   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
     (format-find-file "my-file.enc.yaml" 'sops-file)
@@ -128,6 +143,14 @@ creation_rules:
       (kill-buffer))
     (format-find-file "opaque-name" 'sops-file)
     (should (equal major-mode 'awk-mode))))
+
+(ert-deftest sops-file-test--yaml-mode-disabled ()
+  (with-yaml-mode-disabled
+    (sops-file-auto-mode)
+    (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
+      (find-file "my-file.enc.yaml")
+      (should (equal (buffer-string) "key: value\n"))
+      (should (equal major-mode 'fundamental-mode)))))
 
 (ert-deftest sops-file-test--passphrase-read-file ()
   (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"

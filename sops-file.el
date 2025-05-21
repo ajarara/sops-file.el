@@ -60,9 +60,9 @@
   :group 'sops-file
   :type 'function)
 
-(defcustom sops-file-auto-mode-regex
-  "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice."
-  "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'")
+(defvar sops-file-auto-mode-regex
+  "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
+  "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice.")
 
 (defun sops-file-enable ()
   (format-find-file buffer-file-name 'sops-file))
@@ -78,23 +78,23 @@
       (sops-file-enable)))
 
 
-
 (define-minor-mode sops-file-auto-mode
   "Global minor mode for installing hooks. If yaml-mode is available, add a hook to decrypt on entry of any yaml file if sops can decrypt it. Additionally register an auto-mode-alist entry"
   :global t
   :group 'sops-file
-  (cond ((null sops-file-mode)
+  (cond ((null sops-file-auto-mode)
          (when (fboundp 'yaml-mode)
            (remove-hook 'yaml-mode-hook
                         #'sops-file--yaml-entry-hook))
          (cl-delete-if
           (lambda (entry)
-            (equal (cdr entry) #'sops-file-enable))))
+            (equal (cdr entry) #'sops-file-enable))
+          auto-mode-alist))
         (t
          (when (fboundp 'yaml-mode)
            (add-hook 'yaml-mode-hook
                      #'sops-file--yaml-entry-hook))
-         (cl-pushnew (cons sops-file-auto-mode-regex #'sops-file-enable) auto-mode-alist))))
+         (add-to-list 'auto-mode-alist `(,sops-file-auto-mode-regex . sops-file-enable)))))
 
 ;; we don't remove these on sops-file-auto-mode disable
 ;; since the user explicitly selects the format

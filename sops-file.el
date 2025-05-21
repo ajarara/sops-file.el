@@ -92,34 +92,39 @@
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding"))
-  (let* ((sops-stdout (generate-new-buffer "sops-stdout" t))
-         (sops-stderr (generate-new-buffer "sops-stderr" t))
-         (sops (make-process
-               :name "sops"
-               :buffer sops-stdout
-               :command `("sops"
-                          ,@sops-file-decrypt-args
-                          "--filename-override"
-                          ,buffer-file-name)
-               :stderr sops-stderr
-               ;; suppress "Process sops finished" output
-               :sentinel 'ignore)))
+  (let* ((stdout (generate-new-buffer "stdout" t))
+         (sops (apply
+                #'start-process
+                `("sops" ,stdout "sops"
+                  ,@sops-file-decrypt-args
+                  "--filename-override"
+                  ,buffer-file-name))))
+    (set-process-sentinel sops #'ignore)
     (process-send-region sops from to)
     (process-send-eof sops)
     (accept-process-output sops 1)
-    (with-current-buffer sops-stdout
-      (goto-char (point-min))
-      (if (re-search-forward
+    ;; sops prompts to stdout, so if we get a passphrase prompt
+    ;; delete up until the last control character it sends
+    (let ((clear-passphrase-prompt))
+      (with-current-buffer stdout
+        (goto-char (point-min))
+        (if (re-search-forward
              "Enter passphrase for" nil t)
-          (let ((passwd (read-passwd (buffer-string))))
-            (erase-buffer)
-            (process-send-string
-             sops
-             (format "%s\n" passwd)))))
-    (while (not (equal (process-status sops) 'exit))
-      (accept-process-output sops 1))
+            (let ((passwd (read-passwd (buffer-string))))
+              (setq clear-passphrase-prompt t)
+              (process-send-string
+               sops
+               (format "%s\n" passwd))))
+        (while (not (equal (process-status sops) 'exit))
+          (accept-process-output sops 1))
+        (when clear-passphrase-prompt
+          (save-excursion
+            (goto-char (point-min))
+            (re-search-forward "\\[K")
+            (delete-region (point-min) (point)))
+            (message "clearing junk!"))))
     (erase-buffer)
-    (insert-buffer sops-stdout))
+    (insert-buffer stdout))
   (funcall sops-file-mode-inferrer)
   (point-max))
 

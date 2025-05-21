@@ -129,7 +129,7 @@ creation_rules:
 
 (ert-deftest sops-file-test--passphrase-read-file ()
   (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"
-    (ert-simulate-keys sops-file-test-passphrase-key
+    (ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
       (format-find-file "my-file.enc.yaml" 'sops-file))
     (should (equal (buffer-string) "key: value\n"))
     (should (equal major-mode 'yaml-mode))))

@@ -1,6 +1,10 @@
 # sops-file.el
 A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys stored on yubikeys.
 
+# requirements
+- sops minimum version 3.10.2 (latest as of 5/20/25)
+  - needed for https://github.com/getsops/sops/pull/1400
+
 # proposed implementation
 Sops allows users to have encrypted files map to YAML, JSON, or anything. In the case of YAML, JSON, sops also supports [partial decryption](https://github.com/getsops/sops?tab=readme-ov-file#49encrypting-only-parts-of-a-file).
 

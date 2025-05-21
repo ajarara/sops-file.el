@@ -60,19 +60,44 @@
   :group 'sops-file
   :type 'function)
 
+(defcustom sops-file-auto-mode-regex
+  "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice."
+  "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'")
+
+(defun sops-file-enable ()
+  (format-find-file buffer-file-name 'sops-file))
+
+(defun sops-file--yaml-entry-hook ()
+  (if-let* ((path buffer-file-name)
+            (_
+             (with-temp-buffer
+               (save-excursion
+                 (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
+               (alist-get 'encrypted (json-read-object)))))
+      ;; file is managed by sops, attempt to decrypt it
+      (sops-file-enable)))
+
+
+
 (define-minor-mode sops-file-auto-mode
-  "Global minor mode for installing hooks"
+  "Global minor mode for installing hooks. If yaml-mode is available, add a hook to decrypt on entry of any yaml file if sops can decrypt it. Additionally register an auto-mode-alist entry"
   :global t
   :group 'sops-file
   (cond ((null sops-file-mode)
-         ;; remove yaml mode hook
-         ;; remove auto-mode-alist entry for .enc.yml
-         )
+         (when (fboundp 'yaml-mode)
+           (remove-hook 'yaml-mode-hook
+                        #'sops-file--yaml-entry-hook))
+         (cl-delete-if
+          (lambda (entry)
+            (equal (cdr entry) #'sops-file-enable))))
         (t
-         ;; add yaml mode hook
-         ;; add auto-mode-alist entry for .enc.yml
-         )))
+         (when (fboundp 'yaml-mode)
+           (add-hook 'yaml-mode-hook
+                     #'sops-file--yaml-entry-hook))
+         (cl-pushnew (cons sops-file-auto-mode-regex #'sops-file-enable) auto-mode-alist))))
 
+;; we don't remove these on sops-file-auto-mode disable
+;; since the user explicitly selects the format
 (cl-pushnew
  `(sops-file ,(purecopy "Transparently manipulate sops files")
              nil
@@ -82,12 +107,7 @@
              nil)
  format-alist)
 
-(defun sops-file-is-applicable-p (path)
-  (when path
-    (with-temp-buffer
-      (save-excursion
-        (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
-      (alist-get 'encrypted (json-read-object)))))
+
 
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))

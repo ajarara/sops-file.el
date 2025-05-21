@@ -103,8 +103,9 @@
     (process-send-region sops from to)
     (process-send-eof sops)
     (accept-process-output sops 1)
-    ;; sops prompts to stdout, so if we get a passphrase prompt
-    ;; delete up until the last control character it sends
+    ;; sops prompts for passphrase in stdout, so if we get a
+    ;; passphrase prompt, delete up until the last control character
+    ;; it sends in its own attempt at clearing it
     (let ((clear-passphrase-prompt))
       (with-current-buffer stdout
         (goto-char (point-min))
@@ -121,8 +122,7 @@
           (save-excursion
             (goto-char (point-min))
             (re-search-forward "\\[K")
-            (delete-region (point-min) (point)))
-            (message "clearing junk!"))))
+            (delete-region (point-min) (point))))))
     (erase-buffer)
     (insert-buffer stdout))
   (funcall sops-file-mode-inferrer)
@@ -136,28 +136,28 @@
           (with-temp-buffer
             (insert-buffer orig-buf)
             (apply 'call-process-region
-                      from
-                      to
-                      sops-file-executable
-                      t
-                      t
-                      nil
-                      `(,@sops-file-encrypt-args
-                        "--filename-override"
-                        ,(buffer-file-name orig-buf)))
+                   from
+                   to
+                   sops-file-executable
+                   t
+                   t
+                   nil
+                   `(,@sops-file-encrypt-args
+                     "--filename-override"
+                     ,(buffer-file-name orig-buf)))
             (buffer-string))))
     (erase-buffer)
     (insert transformed)
     (point-max)))
 
-  ;; (define-derived-mode sops-file-mode fundamental-mode)
-  ;; 
-  ;; write-file-functions
+;; (define-derived-mode sops-file-mode fundamental-mode)
+;; 
+;; write-file-functions
 
-  ;; (put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
+;; (put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
 
-  ;; (put 'write-region 'sops-file 'sops-file-write-region)
+;; (put 'write-region 'sops-file 'sops-file-write-region)
 
 
-  (provide 'sops-file)
+(provide 'sops-file)
 ;;; sops-file.el ends here

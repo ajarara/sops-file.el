@@ -170,14 +170,5 @@
     (insert transformed)
     (point-max)))
 
-;; (define-derived-mode sops-file-mode fundamental-mode)
-;; 
-;; write-file-functions
-
-;; (put 'insert-file-contents 'epa-file 'epa-file-insert-file-contents)
-
-;; (put 'write-region 'sops-file 'sops-file-write-region)
-
-
 (provide 'sops-file)
 ;;; sops-file.el ends here

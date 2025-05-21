@@ -92,39 +92,34 @@
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding"))
-  (let* ((age-stdout (generate-new-buffer "age-stdout" t))
-         (age-stderr (generate-new-buffer "age-stderr" t))
-         (age (make-process
+  (let* ((sops-stdout (generate-new-buffer "sops-stdout" t))
+         (sops-stderr (generate-new-buffer "sops-stderr" t))
+         (sops (make-process
                :name "sops"
-               :buffer age-stdout
+               :buffer sops-stdout
                :command `("sops"
                           ,@sops-file-decrypt-args
                           "--filename-override"
                           ,buffer-file-name)
-               :stderr age-stderr
+               :stderr sops-stderr
                ;; suppress "Process sops finished" output
                :sentinel 'ignore)))
-    (process-send-region age from to)
-    (process-send-eof age)
-    (accept-process-output age)
-    (with-current-buffer age-stderr
+    (process-send-region sops from to)
+    (process-send-eof sops)
+    (accept-process-output sops 1)
+    (with-current-buffer sops-stdout
+      (goto-char (point-min))
       (if (re-search-forward
-             "Enter passphrase for identity" nil t)
-        (let ((passwd (read-passwd (buffer-string))))
-          (process-send-string
-           age
-           (format "%s\n" passwd)))))
-    
-    (while (not (equal (process-status age) 'exit))
-      (message
-       "stderr: %s\nstdout: %s"
-       (with-current-buffer age-stderr
-         (buffer-string))
-       (with-current-buffer age-stdout
-         (buffer-string)))
-      (accept-process-output age 3))
+             "Enter passphrase for" nil t)
+          (let ((passwd (read-passwd (buffer-string))))
+            (erase-buffer)
+            (process-send-string
+             sops
+             (format "%s\n" passwd)))))
+    (while (not (equal (process-status sops) 'exit))
+      (accept-process-output sops 1))
     (erase-buffer)
-    (insert-buffer age-stdout))
+    (insert-buffer sops-stdout))
   (funcall sops-file-mode-inferrer)
   (point-max))
 

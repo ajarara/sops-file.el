@@ -21,7 +21,8 @@
 
 ;;; Commentary:
 
-;; Run with `make test`
+;; Run with `make test`, these tests won't run reliably if at all in
+;; a host emacs
 
 (require 'cl-lib)
 (require 'ert)
@@ -152,10 +153,9 @@ creation_rules:
     (format-find-file "opaque-name" 'sops-file)
     (should (equal major-mode 'awk-mode))))
 
-(ert-deftest sops-file-test--yaml-mode-entry-point2 ()
-  (with-sops-file-auto-mode
-    (with-yaml-mode-unavailable
-      (message (prin1-to-string auto-mode-alist))
+(ert-deftest sops-file-test--auto-mode-entry-point ()
+  (with-yaml-mode-unavailable
+    (with-sops-file-auto-mode
       (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
         (find-file "my-file.enc.yaml")
         (should (equal (buffer-string) "key: value\n"))

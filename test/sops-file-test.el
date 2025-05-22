@@ -107,7 +107,7 @@ creation_rules:
      ;; preserve directory on body failure, to aid debugging
      (delete-directory ,test-dir-sym t))))
 
-(defmacro with-yaml-mode-disabled (&rest body)
+(defmacro with-yaml-mode-unavailable (&rest body)
   (declare (debug t) (indent defun))
   (let ((yaml-mode-sym (gensym)))
     `(let ((,yaml-mode-sym (symbol-function 'yaml-mode))
@@ -152,31 +152,21 @@ creation_rules:
     (format-find-file "opaque-name" 'sops-file)
     (should (equal major-mode 'awk-mode))))
 
-;; (ert-deftest sops-file-test--auto-mode-entry-point ()
-;;   (with-sops-file-auto-mode
-;;     (with-yaml-mode-disabled
-;;       (message (prin1-to-string format-alist))
-;;       (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
-;;         (find-file "my-file.enc.yaml")
-;;         (should (equal (buffer-string) "key: value\n"))
-;;         (should (equal major-mode 'fundamental-mode))))))
+(ert-deftest sops-file-test--yaml-mode-entry-point2 ()
+  (with-sops-file-auto-mode
+    (with-yaml-mode-unavailable
+      (message (prin1-to-string auto-mode-alist))
+      (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
+        (find-file "my-file.enc.yaml")
+        (should (equal (buffer-string) "key: value\n"))
+        (should (equal major-mode 'fundamental-mode))))))
 
 (ert-deftest sops-file-test--yaml-mode-entry-point ()
   (with-sops-file-auto-mode
-    (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
-      (find-file "my-file.enc.yaml")
-      (should (equal (buffer-string) "key: value\n"))
-      (should (equal major-mode 'fundamental-mode)))))
-
-;; (ert-deftest sops-file-test--yaml-mode-entry-point ()
-;;   (with-sops-file-auto-mode
-;;     (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
-;;       (find-file "my-file.enc.yaml"))
-;;     ))
-
-;; (ert-deftest sops-file-test--yaml-mode-entry-point2 ()
-;;   (with-sops-file-auto-mode
-;;     ))
+   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
+     (find-file "my-file.enc.yaml")
+     (should (equal (buffer-string) "key: value\n"))
+     (should (equal major-mode 'fundamental-mode)))))
 
 (ert-deftest sops-file-test--passphrase-read-file ()
   (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"

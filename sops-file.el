@@ -52,7 +52,8 @@
   :type '(repeat string))
 
 (defcustom sops-file-mode-inferrer
-  #'normal-mode
+  (lambda ()
+    (set-auto-mode t))
   "Manipulate the mode of the file after decoding it"
   :group 'sops-file
   :type 'function)
@@ -61,17 +62,14 @@
   "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
   "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice.")
 
+(defvar-local sops-file--is-visiting nil)
+
 (defun sops-file-enable ()
-  (format-find-file buffer-file-name 'sops-file))
+  (unless sops-file--is-visiting
+    (format-decode-buffer 'sops-file)))
 
 (defun sops-file--yaml-entry-hook ()
   (if-let* ((path buffer-file-name)
-            (_
-             (equal
-              (buffer-string)
-              (with-temp-buffer
-                (insert-file-contents path)
-                (buffer-string))))
             (_
              (with-temp-buffer
                (save-excursion
@@ -110,44 +108,44 @@
              nil)
  format-alist)
 
-
-
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding"))
-  (let* ((stdout (generate-new-buffer "stdout" t))
-         (sops (apply
-                #'start-process
-                `("sops" ,stdout "sops"
-                  ,@sops-file-decrypt-args
-                  "--filename-override"
-                  ,buffer-file-name))))
-    (set-process-sentinel sops #'ignore)
-    (process-send-region sops from to)
-    (process-send-eof sops)
-    (accept-process-output sops 1)
-    ;; sops prompts for passphrase in stdout, so if we get a
-    ;; passphrase prompt, delete up until the last control character
-    ;; it sends in its own attempt at clearing it
-    (let ((clear-passphrase-prompt))
-      (with-current-buffer stdout
-        (goto-char (point-min))
-        (if (re-search-forward
-             "Enter passphrase for" nil t)
-            (let ((passwd (read-passwd (buffer-string))))
-              (setq clear-passphrase-prompt t)
-              (process-send-string
-               sops
-               (format "%s\n" passwd))))
-        (while (not (equal (process-status sops) 'exit))
-          (accept-process-output sops 1))
-        (when clear-passphrase-prompt
-          (save-excursion
-            (goto-char (point-min))
-            (re-search-forward "\\[K")
-            (delete-region (point-min) (point))))))
-    (erase-buffer)
-    (insert-buffer stdout))
+  (unless sops-file--is-visiting
+    (setq sops-file--is-visiting t)
+    (let* ((stdout (generate-new-buffer "stdout" t))
+           (sops (apply
+                  #'start-process
+                  `("sops" ,stdout "sops"
+                    ,@sops-file-decrypt-args
+                    "--filename-override"
+                    ,buffer-file-name))))
+      (set-process-sentinel sops #'ignore)
+      (process-send-region sops from to)
+      (process-send-eof sops)
+      (accept-process-output sops 1)
+      ;; sops prompts for passphrase in stdout, so if we get a
+      ;; passphrase prompt, delete up until the last control character
+      ;; it sends in its own attempt at clearing it
+      (let ((clear-passphrase-prompt))
+        (with-current-buffer stdout
+          (goto-char (point-min))
+          (if (re-search-forward
+               "Enter passphrase for" nil t)
+              (let ((passwd (read-passwd (buffer-string))))
+                (setq clear-passphrase-prompt t)
+                (process-send-string
+                 sops
+                 (format "%s\n" passwd))))
+          (while (not (equal (process-status sops) 'exit))
+            (accept-process-output sops 1))
+          (when clear-passphrase-prompt
+            (save-excursion
+              (goto-char (point-min))
+              (re-search-forward "\\[K")
+              (delete-region (point-min) (point))))))
+      (erase-buffer)
+      (insert-buffer stdout)))
   (funcall sops-file-mode-inferrer)
   (point-max))
 

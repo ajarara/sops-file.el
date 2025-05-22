@@ -132,54 +132,62 @@ creation_rules:
      (sops-file-auto-mode -1)))
 
 (ert-deftest sops-file-test--read-file ()
-  (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
-    (format-find-file "my-file.enc.yaml" 'sops-file)
-    (should (equal (buffer-string) "key: value\n"))
-    (should (equal major-mode 'yaml-mode))))
+  (let ((relpath "read-file.enc.yaml")
+        (contents "key: value\n"))
+    (with-age-encrypted-file relpath contents
+      (format-find-file relpath 'sops-file)
+      (should (equal (buffer-string) contents))
+      (should (equal major-mode 'yaml-mode)))))
 
 (ert-deftest sops-file-test--major-mode-respects-contents ()
-  (with-age-encrypted-file "opaque-name" "#!/usr/bin/env sh"
-    (format-find-file "opaque-name" 'sops-file)
-    (should (equal (buffer-string) "#!/usr/bin/env sh"))
-    (should (equal major-mode 'sh-mode))))
+  (let ((relpath "respects-contents"))
+    (with-age-encrypted-file relpath "#!/usr/bin/env sh"
+      (format-find-file relpath 'sops-file)
+      (should (equal (buffer-string) "#!/usr/bin/env sh"))
+      (should (equal major-mode 'sh-mode)))))
 
 (ert-deftest sops-file-test--updates-are-saved ()
-  (with-age-encrypted-file "opaque-name" "#!/usr/bin/env sh"
-    (save-current-buffer
-      (format-find-file "opaque-name" 'sops-file)
-      (replace-string "sh" "awk")
-      (save-buffer)
-      (kill-buffer))
-    (format-find-file "opaque-name" 'sops-file)
-    (should (equal major-mode 'awk-mode))))
+  (let ((relpath "updates-saved"))
+    (with-age-encrypted-file relpath "#!/usr/bin/env sh"
+      (save-current-buffer
+        (format-find-file relpath 'sops-file)
+        (replace-string "sh" "awk")
+        (save-buffer)
+        (kill-buffer))
+      (format-find-file relpath 'sops-file)
+      (should (equal major-mode 'awk-mode)))))
 
 (ert-deftest sops-file-test--auto-mode-entry-point ()
-  (with-yaml-mode-unavailable
+  (let ((relpath "auto-mode-entry.enc.yaml"))
+    (with-yaml-mode-unavailable
+      (with-sops-file-auto-mode
+        (with-age-encrypted-file relpath "key: value\n"
+          (find-file relpath)
+          (should (equal (buffer-string) "key: value\n"))
+          (should (equal major-mode 'fundamental-mode)))))))
+
+(ert-deftest sops-file-test--yaml-mode-entry-point ()
+  (let ((relpath "yaml-mode-entry.enc.yaml"))
     (with-sops-file-auto-mode
-      (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
-        (find-file "my-file.enc.yaml")
+      (with-age-encrypted-file relpath "key: value\n"
+        (find-file relpath)
         (should (equal (buffer-string) "key: value\n"))
         (should (equal major-mode 'fundamental-mode))))))
 
-(ert-deftest sops-file-test--yaml-mode-entry-point ()
-  (with-sops-file-auto-mode
-   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
-     (find-file "my-file.enc.yaml")
-     (should (equal (buffer-string) "key: value\n"))
-     (should (equal major-mode 'fundamental-mode)))))
-
 (ert-deftest sops-file-test--passphrase-read-file ()
-  (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"
-    (ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
-      (format-find-file "my-file.enc.yaml" 'sops-file))
-    (should (equal (buffer-string) "key: value\n"))
-    (should (equal major-mode 'yaml-mode))))
+  (let ((relpath "passphrase-read-file.enc.yaml"))
+    (with-file-encrypted-with-passphrase-key relpath "key: value\n"
+      (ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
+        (format-find-file relpath 'sops-file))
+      (should (equal (buffer-string) "key: value\n"))
+      (should (equal major-mode 'yaml-mode)))))
 
 ;; (ert-deftest sops-file-test--re-entering-does-not-redecode ()
-;;   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
-;;     ;; (sops-file-auto-mode)
-;;     (find-file "my-file.enc.yaml")
-;;     (format-find-file "my-file.enc.yaml" 'sops-file)
-;;     (should (equal (buffer-string "key: value\n")))))
+;;   (let ((relpath "re-entering-no-decode.enc.yaml"))
+;;     (with-sops-file-auto-mode
+;;       (with-age-encrypted-file relpath "key: value\n"
+;;         (find-file relpath)
+;;         (format-find-file relpath 'sops-file)
+;;         (should (equal (buffer-string "key: value\n")))))))
 
 (provide 'sops-file-test)

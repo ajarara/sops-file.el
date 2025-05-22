@@ -52,10 +52,7 @@
   :type '(repeat string))
 
 (defcustom sops-file-mode-inferrer
-  (lambda ()
-    (let* ((buffer-file-name
-            (string-replace ".enc" "" buffer-file-name)))
-      (normal-mode t)))
+  #'normal-mode
   "Manipulate the mode of the file after decoding it"
   :group 'sops-file
   :type 'function)
@@ -69,6 +66,12 @@
 
 (defun sops-file--yaml-entry-hook ()
   (if-let* ((path buffer-file-name)
+            (_
+             (equal
+              (buffer-string)
+              (with-temp-buffer
+                (insert-file-contents path)
+                (buffer-string))))
             (_
              (with-temp-buffer
                (save-excursion

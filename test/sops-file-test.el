@@ -122,6 +122,14 @@ creation_rules:
               ,@body)
           (fset 'yaml-mode ,yaml-mode-sym)))))
 
+(defmacro with-sops-file-auto-mode (&rest body)
+  (declare (debug t) (indent defun))
+  `(unwind-protect
+       (progn
+         (sops-file-auto-mode 1)
+         ,@body)
+     (sops-file-auto-mode -1)))
+
 (ert-deftest sops-file-test--read-file ()
   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
     (format-find-file "my-file.enc.yaml" 'sops-file)
@@ -144,13 +152,31 @@ creation_rules:
     (format-find-file "opaque-name" 'sops-file)
     (should (equal major-mode 'awk-mode))))
 
-(ert-deftest sops-file-test--yaml-mode-disabled ()
-  (with-yaml-mode-disabled
-    (sops-file-auto-mode)
+;; (ert-deftest sops-file-test--auto-mode-entry-point ()
+;;   (with-sops-file-auto-mode
+;;     (with-yaml-mode-disabled
+;;       (message (prin1-to-string format-alist))
+;;       (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
+;;         (find-file "my-file.enc.yaml")
+;;         (should (equal (buffer-string) "key: value\n"))
+;;         (should (equal major-mode 'fundamental-mode))))))
+
+(ert-deftest sops-file-test--yaml-mode-entry-point ()
+  (with-sops-file-auto-mode
     (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
       (find-file "my-file.enc.yaml")
       (should (equal (buffer-string) "key: value\n"))
       (should (equal major-mode 'fundamental-mode)))))
+
+;; (ert-deftest sops-file-test--yaml-mode-entry-point ()
+;;   (with-sops-file-auto-mode
+;;     (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
+;;       (find-file "my-file.enc.yaml"))
+;;     ))
+
+;; (ert-deftest sops-file-test--yaml-mode-entry-point2 ()
+;;   (with-sops-file-auto-mode
+;;     ))
 
 (ert-deftest sops-file-test--passphrase-read-file ()
   (with-file-encrypted-with-passphrase-key "my-file.enc.yaml" "key: value\n"
@@ -158,5 +184,12 @@ creation_rules:
       (format-find-file "my-file.enc.yaml" 'sops-file))
     (should (equal (buffer-string) "key: value\n"))
     (should (equal major-mode 'yaml-mode))))
+
+;; (ert-deftest sops-file-test--re-entering-does-not-redecode ()
+;;   (with-age-encrypted-file "my-file.enc.yaml" "key: value\n"
+;;     ;; (sops-file-auto-mode)
+;;     (find-file "my-file.enc.yaml")
+;;     (format-find-file "my-file.enc.yaml" 'sops-file)
+;;     (should (equal (buffer-string "key: value\n")))))
 
 (provide 'sops-file-test)

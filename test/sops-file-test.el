@@ -172,7 +172,7 @@ creation_rules:
       (with-age-encrypted-file relpath "key: value\n"
         (find-file relpath)
         (should (equal (buffer-string) "key: value\n"))
-        (should (equal major-mode 'fundamental-mode))))))
+        (should (equal major-mode 'yaml-mode))))))
 
 (ert-deftest sops-file-test--passphrase-read-file ()
   (let ((relpath "passphrase-read-file.enc.yaml"))

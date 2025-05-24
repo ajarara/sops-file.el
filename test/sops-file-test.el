@@ -198,6 +198,6 @@ creation_rules:
 ;;       (with-age-encrypted-file relpath "key: value\n"
 ;;         (find-file relpath)
 ;;         (format-find-file relpath 'sops-file)
-;;         (should (equal (buffer-string "key: value\n")))))))
+;;         (should (equal (buffer-string) "key: value\n"))))))
 
 (provide 'sops-file-test)

@@ -52,7 +52,10 @@
   :type '(repeat string))
 
 (defcustom sops-file-mode-inferrer
-  #'normal-mode
+  (lambda ()
+    (let ((buffer-file-name
+           (string-replace ".enc" "" buffer-file-name)))
+      (normal-mode)))
   "Manipulate the mode of the file after decoding it"
   :group 'sops-file
   :type 'function)
@@ -69,12 +72,14 @@
     (format-decode-buffer 'sops-file)))
 
 (defun sops-file--yaml-entry-hook ()
-  (if-let* ((path buffer-file-name)
+  (if-let* ((_ (file-exists-p buffer-file-name))
+            (path buffer-file-name)
             (_
              (with-temp-buffer
                (save-excursion
                  (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
-               (alist-get 'encrypted (json-read-object)))))
+               ;; if not managed we get :json-false instead of nil, which is truthy
+               (eq t (alist-get 'encrypted (json-read-object))))))
       ;; file is managed by sops, attempt to decrypt it
       (sops-file-enable)))
 
@@ -124,7 +129,6 @@
                         ,buffer-file-name
                         "--output"
                         "/dev/stderr")
-                        
              :buffer stdout
              :sentinel #'ignore
              :stderr stderr)))

@@ -83,7 +83,6 @@
       ;; file is managed by sops, attempt to decrypt it
       (sops-file-enable)))
 
-
 (define-minor-mode sops-file-auto-mode
   "Global minor mode for installing hooks. If yaml-mode is available, add a hook to decrypt on entry of any yaml file if sops can decrypt it. Additionally register an auto-mode-alist entry"
   :global t

@@ -186,6 +186,8 @@ creation_rules:
 
 ;; (ert-deftest sops-file-test--yaml-is-not-managed-by-sops ())
 
+;; (ert-deftest sops-file-test--cannot-decrypt-shows-error ())
+
 ;; fails with "Unknown format sops-file" in format.el
 ;; reproduced by toggling sops-file-auto-mode
 ;; might be stale references or something?

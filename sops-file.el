@@ -52,8 +52,7 @@
   :type '(repeat string))
 
 (defcustom sops-file-mode-inferrer
-  (lambda ()
-    (set-auto-mode t))
+  #'normal-mode
   "Manipulate the mode of the file after decoding it"
   :group 'sops-file
   :type 'function)
@@ -63,6 +62,7 @@
   "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice.")
 
 (defvar-local sops-file--is-visiting nil)
+(put 'sops-file--is-visiting 'permanent-local t)
 
 (defun sops-file-enable ()
   (unless sops-file--is-visiting
@@ -113,39 +113,43 @@
     (error "Cannot handle partial decoding"))
   (unless sops-file--is-visiting
     (setq sops-file--is-visiting t)
-    (let* ((stdout (generate-new-buffer "stdout" t))
-           (sops (apply
-                  #'start-process
-                  `("sops" ,stdout "sops"
-                    ,@sops-file-decrypt-args
-                    "--filename-override"
-                    ,buffer-file-name))))
-      (set-process-sentinel sops #'ignore)
+    (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
+           (stderr (generate-new-buffer " *sops-file-stderr*" t))
+           (sops
+            (make-process
+             :name "sops"
+             :command `("sops"
+                        ,@sops-file-decrypt-args
+                        "--filename-override"
+                        ,buffer-file-name
+                        "--output"
+                        "/dev/stderr")
+                        
+             :buffer stdout
+             :sentinel #'ignore
+             :stderr stderr)))
+      (set-process-sentinel (get-buffer-process stderr) #'ignore)
       (process-send-region sops from to)
       (process-send-eof sops)
       (accept-process-output sops 1)
-      ;; sops prompts for passphrase in stdout, so if we get a
-      ;; passphrase prompt, delete up until the last control character
-      ;; it sends in its own attempt at clearing it
-      (let ((clear-passphrase-prompt))
-        (with-current-buffer stdout
-          (goto-char (point-min))
-          (if (re-search-forward
-               "Enter passphrase for" nil t)
-              (let ((passwd (read-passwd (buffer-string))))
-                (setq clear-passphrase-prompt t)
-                (process-send-string
+      (with-current-buffer stdout
+        (if-let ((_
+                  (cl-loop
+                   for prompt in '("Enter passphrase for"
+                                   "Enter PIN for")
+                   when (save-excursion
+                          (goto-char (point-min))
+                          (re-search-forward prompt nil t))
+                   return t))
+                 (passwd (read-passwd (buffer-string))))
+            (process-send-string
                  sops
-                 (format "%s\n" passwd))))
-          (while (not (equal (process-status sops) 'exit))
-            (accept-process-output sops 1))
-          (when clear-passphrase-prompt
-            (save-excursion
-              (goto-char (point-min))
-              (re-search-forward "\\[K")
-              (delete-region (point-min) (point))))))
+                 (format "%s\n" passwd))
+          ))
+      (while (not (equal (process-status sops) 'exit))
+        (accept-process-output sops 1))
       (erase-buffer)
-      (insert-buffer stdout)))
+      (insert-buffer stderr)))
   (funcall sops-file-mode-inferrer)
   (point-max))
 

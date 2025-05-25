@@ -88,19 +88,19 @@
   :global t
   :group 'sops-file
   (cond ((null sops-file-auto-mode)
-         (when (fboundp 'yaml-mode)
+         (if (fboundp 'yaml-mode)
            (remove-hook 'yaml-mode-hook
-                        #'sops-file--yaml-entry-hook))
-         (setq auto-mode-alist
-               (cl-delete-if
-                (lambda (entry)
-                  (equal (cdr entry) #'sops-file-enable))
-                auto-mode-alist)))
+                        #'sops-file--yaml-entry-hook)
+           (setq auto-mode-alist
+                 (cl-delete-if
+                  (lambda (entry)
+                    (equal (cdr entry) #'sops-file-enable))
+                  auto-mode-alist))))
         (t
-         (when (fboundp 'yaml-mode)
+         (if (fboundp 'yaml-mode)
            (add-hook 'yaml-mode-hook
-                     #'sops-file--yaml-entry-hook))
-         (add-to-list 'auto-mode-alist `(,sops-file-auto-mode-regex . sops-file-enable)))))
+                     #'sops-file--yaml-entry-hook)
+           (add-to-list 'auto-mode-alist `(,sops-file-auto-mode-regex . sops-file-enable))))))
 
 ;; we don't remove these on sops-file-auto-mode disable
 ;; since the user explicitly selects the format

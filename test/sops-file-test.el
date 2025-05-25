@@ -30,18 +30,19 @@
 (require 'yaml-mode)
 (require 'conf-mode)
 (require 'sops-file)
+(require 'json)
 
 
 (defun sops-file-test--generate-age-keys ()
-    (with-temp-buffer
-      (call-process "age-keygen" nil (current-buffer))
-      (goto-char (point-min))
-      (let (public-key private-key)
-        (when (re-search-forward "^# public key: \\(.+\\)$" nil t)
-          (setq public-key (match-string 1)))
-        (when (re-search-forward "^\\(AGE-SECRET-KEY-.*\\)$" nil t)
-          (setq private-key (match-string 1)))
-        (list public-key private-key))))
+  (with-temp-buffer
+    (call-process "age-keygen" nil (current-buffer))
+    (goto-char (point-min))
+    (let (public-key private-key)
+      (when (re-search-forward "^# public key: \\(.+\\)$" nil t)
+        (setq public-key (match-string 1)))
+      (when (re-search-forward "^\\(AGE-SECRET-KEY-.*\\)$" nil t)
+        (setq private-key (match-string 1)))
+      (list public-key private-key))))
 
 (defun sops-file-test--yaml-for-key (public-key)
   (format "
@@ -182,10 +183,10 @@ creation_rules:
       (should (equal (buffer-string) "key: value\n"))
       (should (equal major-mode 'yaml-mode)))))
 
-;; (ert-deftest sops-file-test--file-does-not-exist-is-silent ()
-;;   (with-sops-file-auto-mode
-;;    (find-file "ex.enc.yaml")
-;;    (should (equal (buffer-string) "sops metadata not found\n"))))
+(ert-deftest sops-file-test--file-does-not-exist-is-silent ()
+  (with-sops-file-auto-mode
+   (find-file "ex.enc.yaml")
+   (should (equal (buffer-string) ""))))
 
 ;; (ert-deftest sops-file-test--yaml-is-not-managed-by-sops ())
 

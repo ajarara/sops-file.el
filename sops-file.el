@@ -91,10 +91,11 @@
          (when (fboundp 'yaml-mode)
            (remove-hook 'yaml-mode-hook
                         #'sops-file--yaml-entry-hook))
-         (cl-delete-if
-          (lambda (entry)
-            (equal (cdr entry) #'sops-file-enable))
-          auto-mode-alist))
+         (setq auto-mode-alist
+               (cl-delete-if
+                (lambda (entry)
+                  (equal (cdr entry) #'sops-file-enable))
+                auto-mode-alist)))
         (t
          (when (fboundp 'yaml-mode)
            (add-hook 'yaml-mode-hook

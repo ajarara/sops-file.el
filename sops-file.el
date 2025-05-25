@@ -148,9 +148,8 @@
                  (passwd (read-passwd (buffer-string))))
             (process-send-string
                  sops
-                 (format "%s\n" passwd))
-          ))
-      (while (not (equal (process-status sops) 'exit))
+                 (format "%s\n" passwd))))
+      (while (equal (process-status sops) 'run)
         (accept-process-output sops 1))
       (erase-buffer)
       (insert-buffer stderr)))

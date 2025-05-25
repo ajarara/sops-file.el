@@ -50,6 +50,16 @@ creation_rules:
   - age: %s
 " public-key))
 
+(defmacro with-sops-identity (identity-file &rest body)
+  (declare (debug t) (indent defun))
+  (let ((old-key-file-sym (gensym)))
+    `(let ((,old-key-file-sym (getenv "SOPS_AGE_KEY_FILE")))
+       (unwind-protect
+           (progn
+             (setenv "SOPS_AGE_KEY_FILE" ,identity-file)
+             ,@body)
+         (setenv "SOPS_AGE_KEY_FILE" ,old-key-file-sym)))))
+
 (defmacro with-age-encrypted-file (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym))
@@ -68,8 +78,8 @@ creation_rules:
        (with-temp-file ,relpath
          (insert ,contents))
        (process-lines "sops" "encrypt" "-i" ,relpath)
-       (setenv "SOPS_AGE_KEY_FILE" ,identity-file-sym)
-       ,@body
+       (with-sops-identity ,identity-file-sym
+         ,@body)
        (delete-directory ,test-dir-sym t))))
 
 (defvar sops-file-test-passphrase-key "passphrase")
@@ -102,10 +112,10 @@ creation_rules:
      (with-temp-file ,relpath
        (insert ,contents))
      (process-lines "sops" "encrypt" "-i" ,relpath)
-     (setenv "SOPS_AGE_KEY_FILE" (expand-file-name "identity.txt"))
-     ;; disable gpg-agent pinentry
+     ;; disable gpg-agent pinentry on test host
      (setenv "GPG_AGENT_INFO" "")
-     ,@body
+     (with-sops-identity ,identity-file-sym
+       ,@body)
      ;; preserve directory on body failure, to aid debugging
      (delete-directory ,test-dir-sym t))))
 

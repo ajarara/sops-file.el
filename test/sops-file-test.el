@@ -182,22 +182,21 @@ creation_rules:
       (should (equal (buffer-string) "key: value\n"))
       (should (equal major-mode 'yaml-mode)))))
 
-;; (ert-deftest sops-file-test--file-does-not-exist-is-silent ())
+;; (ert-deftest sops-file-test--file-does-not-exist-is-silent ()
+;;   (with-sops-file-auto-mode
+;;    (find-file "ex.enc.yaml")
+;;    (should (equal (buffer-string) "sops metadata not found\n"))))
 
 ;; (ert-deftest sops-file-test--yaml-is-not-managed-by-sops ())
 
 ;; (ert-deftest sops-file-test--cannot-decrypt-shows-error ())
 
-;; fails with "Unknown format sops-file" in format.el
-;; reproduced by toggling sops-file-auto-mode
-;; might be stale references or something?
-
-;; (ert-deftest sops-file-test--re-entering-does-not-redecode ()
-;;   (let ((relpath "re-entering-no-decode.enc.yaml"))
-;;     (with-sops-file-auto-mode
-;;       (with-age-encrypted-file relpath "key: value\n"
-;;         (find-file relpath)
-;;         (format-find-file relpath 'sops-file)
-;;         (should (equal (buffer-string) "key: value\n"))))))
+(ert-deftest sops-file-test--re-entering-does-not-redecode ()
+  (let ((relpath "re-entering-no-decode.enc.yaml"))
+    (with-sops-file-auto-mode
+      (with-age-encrypted-file relpath "key: value\n"
+        (find-file relpath)
+        (format-find-file relpath 'sops-file)
+        (should (equal (buffer-string) "key: value\n"))))))
 
 (provide 'sops-file-test)

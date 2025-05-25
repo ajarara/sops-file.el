@@ -239,7 +239,12 @@ creation_rules:
           (let ((expected-failure "asdf"))
             (should (re-search-forward "incorrect passphrase"))))))))
 
-(ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ())
+(ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ()
+  (let ((relpath "my-secret-package.enc.el"))
+    (with-sops-file-auto-mode
+      (with-age-encrypted-file relpath ""
+        (find-file relpath)
+        (should (equal major-mode 'emacs-lisp-mode))))))
 
 (ert-deftest sops-file-test--re-entering-does-not-redecode ()
   (let ((relpath "re-entering-no-decode.enc.yaml"))

@@ -60,6 +60,18 @@ creation_rules:
              ,@body)
          (setenv "SOPS_AGE_KEY_FILE" ,old-key-file-sym)))))
 
+(defmacro with-disabled-gpg-agent (&rest body)
+  (declare (debug t) (indent defun))
+  (let ((disabled-gpg-agent-info-sym (gensym)))
+    `(let ((,disabled-gpg-agent-info-sym (getenv "GPG_AGENT_INFO")))
+       (unwind-protect
+           (progn
+             ;; we deliberately set to the empty string to trigger a parse
+             ;; error in the gopgagent library sops uses
+             (setenv "GPG_AGENT_INFO" "")
+             ,@body)
+         (setenv "GPG_AGENT_INFO" ,disabled-gpg-agent-info-sym)))))
+
 (defmacro with-age-encrypted-file (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym))
@@ -112,10 +124,9 @@ creation_rules:
      (with-temp-file ,relpath
        (insert ,contents))
      (process-lines "sops" "encrypt" "-i" ,relpath)
-     ;; disable gpg-agent pinentry on test host
-     (setenv "GPG_AGENT_INFO" "")
-     (with-sops-identity ,identity-file-sym
-       ,@body)
+     (with-disabled-gpg-agent
+      (with-sops-identity ,identity-file-sym
+        ,@body))
      ;; preserve directory on body failure, to aid debugging
      (delete-directory ,test-dir-sym t))))
 

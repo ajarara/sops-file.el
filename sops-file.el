@@ -60,6 +60,17 @@
   :group 'sops-file
   :type 'function)
 
+(defcustom sops-file-error-renderer
+  (lambda (stderr-buf)
+    (with-current-buffer (get-buffer-create "*sops-file-error*")
+      (erase-buffer)
+      (insert-buffer stderr-buf)
+      (special-mode)
+      (message "Could not decrypt visited file, see *sops-file-error* for sops output")))
+  "Report error (likely decryption) to the user."
+  :group 'sops-file
+  :type 'function)
+
 (defvar sops-file-auto-mode-regex
   "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
   "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice.")
@@ -118,8 +129,8 @@
     (error "Cannot handle partial decoding"))
   (unless sops-file--is-visiting
     (setq sops-file--is-visiting t)
-    (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
-           (stderr (generate-new-buffer " *sops-file-stderr*" t))
+    (let* ((stdout (generate-new-buffer "*sops-file-stdout*" t))
+           (stderr (generate-new-buffer "*sops-file-stderr*" t))
            (sops
             (make-process
              :name "sops"
@@ -151,8 +162,12 @@
                  (format "%s\n" passwd))))
       (while (equal (process-status sops) 'run)
         (accept-process-output sops 1))
-      (erase-buffer)
-      (insert-buffer stderr)))
+      (if (equal (process-exit-status sops) 0)
+          (progn
+            (erase-buffer)
+            (insert-buffer stderr))
+        (save-excursion
+          (funcall sops-file-error-renderer stderr)))))
   (funcall sops-file-mode-inferrer)
   (point-max))
 

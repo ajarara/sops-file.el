@@ -63,11 +63,12 @@
 (defcustom sops-file-error-renderer
   (lambda (stderr-buf)
     (with-current-buffer (get-buffer-create "*sops-file-error*")
-      (erase-buffer)
-      (insert-buffer stderr-buf)
+      (let ((buffer-read-only nil))
+        (erase-buffer)
+        (insert-buffer stderr-buf))
       (special-mode)
       (message "Could not decrypt visited file, see *sops-file-error* for sops output")))
-  "Report error (likely decryption) to the user."
+  "Report sops error (likely decryption) to the user."
   :group 'sops-file
   :type 'function)
 

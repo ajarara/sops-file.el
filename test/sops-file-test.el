@@ -220,17 +220,26 @@ creation_rules:
         (should (equal retrieved on-disk))))))
 
 (ert-deftest sops-file-test--cannot-decrypt-shows-error-in-sops-file-errors ()
-  (with-sops-file-auto-mode
-    (with-age-encrypted-file "cannot-decrypt.enc.yaml" "key: value\n"
-      (setenv "SOPS_AGE_KEY_FILE")
-      (find-file "cannot-decrypt.enc.yaml")
-      (with-current-buffer "*sops-file-error*"
-        (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
-          (should (equal (buffer-substring (point-min) (1+ (length expected-failure))) expected-failure)))))))
+  (let ((relpath "cannot-decrypt.enc.yaml"))
+    (with-sops-file-auto-mode
+      (with-age-encrypted-file relpath "key: value\n"
+        (setenv "SOPS_AGE_KEY_FILE")
+        (find-file relpath)
+        (with-current-buffer "*sops-file-error*"
+          (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
+            (should (equal (buffer-substring (point-min) (1+ (length expected-failure))) expected-failure))))))))
 
-(ert-deftest sops-file-test--bad-passwd-shows-error-in-sops-file-errors ())
+(ert-deftest sops-file-test--bad-passwd-shows-error-in-sops-file-errors ()
+  (let ((relpath "bad-passwd.enc.yaml"))
+    (with-sops-file-auto-mode
+      (with-file-encrypted-with-passphrase-key relpath "a: c"
+        (ert-simulate-keys (format "%s\n" "not-the-passphrase")
+          (find-file relpath))
+        (with-current-buffer "*sops-file-error*"
+          (let ((expected-failure "asdf"))
+            (should (re-search-forward "incorrect passphrase"))))))))
 
-;; (ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ())
+(ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ())
 
 (ert-deftest sops-file-test--re-entering-does-not-redecode ()
   (let ((relpath "re-entering-no-decode.enc.yaml"))

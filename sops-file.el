@@ -83,7 +83,7 @@
   (unless sops-file--is-visiting
     (format-decode-buffer 'sops-file)))
 
-(defun sops-file--yaml-entry-hook ()
+(defun sops-file-entry-hook ()
   (if-let* ((_ (file-exists-p buffer-file-name))
             (path buffer-file-name)
             (_
@@ -102,7 +102,7 @@
   (cond ((null sops-file-auto-mode)
          (if (fboundp 'yaml-mode)
            (remove-hook 'yaml-mode-hook
-                        #'sops-file--yaml-entry-hook)
+                        #'sops-file-entry-hook)
            (setq auto-mode-alist
                  (cl-delete-if
                   (lambda (entry)
@@ -111,7 +111,7 @@
         (t
          (if (fboundp 'yaml-mode)
            (add-hook 'yaml-mode-hook
-                     #'sops-file--yaml-entry-hook)
+                     #'sops-file-entry-hook)
            (add-to-list 'auto-mode-alist `(,sops-file-auto-mode-regex . sops-file-enable))))))
 
 ;; we don't remove these on sops-file-auto-mode disable

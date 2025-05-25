@@ -254,4 +254,16 @@ creation_rules:
         (format-find-file relpath 'sops-file)
         (should (equal (buffer-string) "key: value\n"))))))
 
+(ert-deftest sops-file-test--re-encode-allows-decode ()
+  (let ((relpath "re-encode-allows-decode.enc.yaml"))
+    (with-sops-file-auto-mode
+      (with-age-encrypted-file relpath "key: value\n"
+        (find-file-literally relpath)
+        (format-decode-buffer 'sops-file)
+        (should (equal (buffer-string) "key: value\n"))
+        (format-encode-buffer 'sops-file)
+        (should (not (equal (buffer-string) "key: value\n")))
+        (format-decode-buffer 'sops-file)
+        (should (equal (buffer-string) "key: value\n"))))))
+
 (provide 'sops-file-test)

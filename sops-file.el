@@ -192,6 +192,7 @@
             (buffer-string))))
     (erase-buffer)
     (insert transformed)
+    (setq sops-file--is-visiting nil)
     (point-max)))
 
 (provide 'sops-file)

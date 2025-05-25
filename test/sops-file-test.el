@@ -56,21 +56,21 @@ creation_rules:
         (sops-yaml-sym (gensym))
         (test-dir-sym (gensym))
         (identity-file-sym (gensym)))
-  `(let* ((,keys-sym (sops-file-test--generate-age-keys))
-          (,sops-yaml-sym (sops-file-test--yaml-for-key (car ,keys-sym)))
-          (,test-dir-sym (make-temp-file "sops-file-test--" t))
-          (default-directory ,test-dir-sym)
-          (,identity-file-sym (expand-file-name "identity.txt")))
-     (with-temp-file ,identity-file-sym
-       (insert (cadr ,keys-sym)))
-     (with-temp-file (expand-file-name ".sops.yaml")
-       (insert ,sops-yaml-sym))
-     (with-temp-file ,relpath
-       (insert ,contents))
-     (process-lines "sops" "encrypt" "-i" ,relpath)
-     (setenv "SOPS_AGE_KEY_FILE" ,identity-file-sym)
-     ,@body
-     (delete-directory ,test-dir-sym t))))
+    `(let* ((,keys-sym (sops-file-test--generate-age-keys))
+            (,sops-yaml-sym (sops-file-test--yaml-for-key (car ,keys-sym)))
+            (,test-dir-sym (make-temp-file "sops-file-test--" t))
+            (default-directory ,test-dir-sym)
+            (,identity-file-sym (expand-file-name "identity.txt")))
+       (with-temp-file ,identity-file-sym
+         (insert (cadr ,keys-sym)))
+       (with-temp-file (expand-file-name ".sops.yaml")
+         (insert ,sops-yaml-sym))
+       (with-temp-file ,relpath
+         (insert ,contents))
+       (process-lines "sops" "encrypt" "-i" ,relpath)
+       (setenv "SOPS_AGE_KEY_FILE" ,identity-file-sym)
+       ,@body
+       (delete-directory ,test-dir-sym t))))
 
 (defvar sops-file-test-passphrase-key "passphrase")
 
@@ -188,7 +188,15 @@ creation_rules:
    (find-file "ex.enc.yaml")
    (should (equal (buffer-string) ""))))
 
-;; (ert-deftest sops-file-test--yaml-is-not-managed-by-sops ())
+(ert-deftest sops-file-test--yaml-is-not-managed-by-sops ()
+  (with-sops-file-auto-mode
+    (with-age-encrypted-file "_" "_"
+      (find-file ".sops.yaml")
+      (let ((retrieved (buffer-string))
+            (on-disk (with-temp-buffer
+                       (insert-file ".sops.yaml")
+                       (buffer-string))))
+        (should (equal retrieved on-disk))))))
 
 ;; (ert-deftest sops-file-test--cannot-decrypt-shows-error ())
 

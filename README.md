@@ -5,19 +5,30 @@ A package for viewing + editing [sops](https://github.com/getsops/sops) files. I
 - sops minimum version 3.10.2 (latest as of 5/20/25)
   - needed for https://github.com/getsops/sops/pull/1400
 
-# proposed implementation
-Sops allows users to have encrypted files map to YAML, JSON, or anything. In the case of YAML, JSON, sops also supports [partial decryption](https://github.com/getsops/sops?tab=readme-ov-file#49encrypting-only-parts-of-a-file).
+# installation
+Using straight.el:
+``` emacs-lisp
+(use-package sops-file
+  :straight
+  `(:host github :repo "ajarara/sops-file.el")
+  :config
+  ;; adds an auto-mode-alist entry and yaml-mode hooks if yaml-mode is installed
+  (sops-file-auto-mode 1))
+```
 
-So we want whatever entry/exit mechanism (tramp, auto-mode-alist, format-alist, a minor mode) to be able to:
-- change the major mode if applicable
-- override the read/save functionality
-- prompt the user for a PIN if needed[^1]
+After we cut a version we'll be on melpa{-stable}
 
-We'll do this by using 'sops filestatus' to determine whether to run the yaml file through sops as part of a major mode hook. Then, if it hits, we'll decrypt, prompting if necessary, and I think we'll use `major-mode-suspend` and redecide based off of contents/file-name[^2]. We also overwrite write-region for the buffer to save through piping buffer contents through sops.
+# usage
+Without any configuration, users can simply do `M-x format-find-file`, select the file, then select format `sops-file`. Users can also, when visiting a file literally, `M-x format-decode-buffer`.
 
+`sops-file-auto-mode` is a global minor mode that attaches a hook to yaml-mode and installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not).
 
-[^1]: Sops can use any number of credentials, the ones that are interesting to me are gpg/age keys. Gpg has pinentry, and while age has a pinentry capable implementation (rage), sops links against age as a library instead of a program (so no possibility of letting users work around it). However sops passes through pin requests, so we just have to also pass them through.
-[^2]: Because decrypted contents can be yaml, we can't blindly remove .yaml (or .yml or whatever). We could maybe go with "remove .yaml unless it's the only suffix" and let the user override with something more advanced..
+Users are welcome to attach `sops-file-entry-hook` to any major mode they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to *sops-file-error*.
+
+# roadmap
+I'm not sure when to define stability, I'd prefer to let this soak with some users before claiming stability. However there are some features I know need to be implemented to be a comprehensive experience. 
+- Keygroup handling: sops can ask multiple times for passphrases for a single decryption pass
+- Partially encrypted files (this may work already, it's just untested)
 
 ## inspirations
-epa-file, [sops.el](https://github.com/djgoku/sops)
+epa-file, [sops.el](https://github.com/djgoku/sops), rot13

@@ -44,11 +44,14 @@
         (setq private-key (match-string 1)))
       (list public-key private-key))))
 
-(defun sops-file-test--yaml-for-key (public-key)
-  (format "
+(defun sops-file-test--yaml-for-keys (public-keys)
+  (with-temp-file ".sops.yaml"
+    (insert "
 creation_rules:
-  - age: %s
-" public-key))
+  - age:")
+    (dolist (key public-keys)
+      (insert (format " %s," key)))
+    (delete-char -1)))
 
 (defmacro with-sops-identity (identity-file &rest body)
   (declare (debug t) (indent defun))
@@ -79,14 +82,12 @@ creation_rules:
         (test-dir-sym (gensym))
         (identity-file-sym (gensym)))
     `(let* ((,keys-sym (sops-file-test--generate-age-keys))
-            (,sops-yaml-sym (sops-file-test--yaml-for-key (car ,keys-sym)))
             (,test-dir-sym (make-temp-file "sops-file-test--" t))
             (default-directory ,test-dir-sym)
+            (,sops-yaml-sym (sops-file-test--yaml-for-keys (list (car ,keys-sym))))
             (,identity-file-sym (expand-file-name "identity.txt")))
        (with-temp-file ,identity-file-sym
          (insert (cadr ,keys-sym)))
-       (with-temp-file (expand-file-name ".sops.yaml")
-         (insert ,sops-yaml-sym))
        (with-temp-file ,relpath
          (insert ,contents))
        (process-lines "sops" "encrypt" "-i" ,relpath)
@@ -103,7 +104,7 @@ creation_rules:
         (test-dir-sym (gensym))
         (identity-file-sym (gensym)))
   `(let* ((,keys-sym (sops-file-test--generate-age-keys))
-          (,sops-yaml-sym (sops-file-test--yaml-for-key (car ,keys-sym)))
+          (,sops-yaml-sym (sops-file-test--yaml-for-keys (list (car ,keys-sym))))
           (,test-dir-sym (make-temp-file "sops-file-test--" t))
           (default-directory ,test-dir-sym)
           (,identity-file-sym (expand-file-name "identity.txt")))

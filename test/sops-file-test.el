@@ -44,24 +44,27 @@
         (setq private-key (match-string 1)))
       (list public-key private-key))))
 
-(defun sops-file-test--write-sops-yaml-for-keys (public-keys)
+(defun sops-file-test--write-sops-yaml-for-keys (keys)
   (with-temp-file ".sops.yaml"
     (insert "
 creation_rules:
   - age:")
-    (dolist (key public-keys)
-      (insert (format " %s," key)))
+    (dolist (key keys)
+      (insert (format " %s," (car key))))
     (delete-char -1)))
+
+(defun sops-file-test--write-identity-for-keys (keys)
+  (with-temp-file "identity.txt"
+    (insert
+     (string-join
+      (mapcar #'cadr keys)
+      "\n"))))
 
 (defmacro with-sops-identity (keys &rest body)
   (declare (debug t) (indent defun))
   (let ((old-key-file-sym (gensym)))
     `(let ((,old-key-file-sym (getenv "SOPS_AGE_KEY_FILE")))
-       (with-temp-file "identity.txt"
-         (insert
-          (string-join
-           (mapcar #'cadr ,keys)
-           "\n")))
+       (sops-file-test--write-identity-for-keys ,keys)
        (unwind-protect
            (progn
              (setenv "SOPS_AGE_KEY_FILE" "identity.txt")
@@ -85,16 +88,29 @@ creation_rules:
          ;; preserve directory on body failure, to aid debugging
          (delete-directory default-directory t)))))
 
+;; TODO should be a function, should divorce from key generation
 (defmacro with-age-encrypted-file (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym)))
     `(let* ((,keys-sym (sops-file-test--generate-age-keys)))
-       (sops-file-test--write-sops-yaml-for-keys (list (car ,keys-sym)))
+       (sops-file-test--write-sops-yaml-for-keys (list ,keys-sym))
        (with-temp-file ,relpath
          (insert ,contents))
        (process-lines "sops" "encrypt" "-i" ,relpath)
        (with-sops-identity (list ,keys-sym)
          ,@body))))
+
+(defun sops-file-test-encrypt-buffer-to (file)
+  (should (eq 0
+              (call-process-region (point-min)
+                                   (point-max)
+                                   "sops"
+                                   nil
+                                   `(:file ,file)
+                                   nil
+                                   `("encrypt"
+                                     "--filename-override"
+                                     ,file)))))
 
 (defmacro with-disabled-gpg-agent (&rest body)
   (declare (debug t) (indent defun))
@@ -110,7 +126,7 @@ creation_rules:
 
 (defvar sops-file-test-passphrase-key "passphrase")
 
-(defun encrypt-identity-file ()
+(defun sops-file-test-age-encrypt-identity-file ()
   (let ((age (start-process "age" nil "age" "-p" "-o" "identity.txt.age" "identity.txt")))
     (dotimes (i 2)
       (process-send-string age (format "%s\n" sops-file-test-passphrase-key)))
@@ -124,7 +140,7 @@ creation_rules:
   "Encrypt the identity file with sops-file-test-passphrase-key: decryptions will require a passphrase to be input. See `with-passphrase-input'."
   (declare (debug t) (indent defun))
   `(progn
-     (encrypt-identity-file)
+     (sops-file-test-age-encrypt-identity-file)
      (with-disabled-gpg-agent
        ,@body)))
 
@@ -160,6 +176,9 @@ creation_rules:
   (let ((relpath "read-file.enc.yaml")
         (contents "key: value\n"))
     (with-sops-file-directory "read-file"
+      ;; generate keys
+      ;; write those keys to sops
+      
       (with-age-encrypted-file relpath contents
         (format-find-file relpath 'sops-file)
         (should (equal (buffer-string) contents))
@@ -288,7 +307,8 @@ creation_rules:
 ;; (ert-deftest sops-file-test--file-creation ()
 ;;   (let ((relpath "non-existent-file.enc.yaml"))
 ;;     (with-sops-file-directory "file-creation"
-;;       (sops-file-test--write-sops-yaml-for-keys)
+;;       (with-sops-file-auto-mode
+;;         )
 ;;       (format-find-file relpath 'sops-file))))
 
 (provide 'sops-file-test)

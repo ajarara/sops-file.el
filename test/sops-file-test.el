@@ -77,8 +77,11 @@ creation_rules:
        (let* ((default-directory
                (make-temp-file
                 (expand-file-name ,name ,sops-file-test-root) t)))
-         ;; TODO: here's the best place to kill the sops-file-error buffer
-         ,@body
+         (unwind-protect
+             (progn
+               ,@body)
+           (ignore-errors
+             (kill-buffer "*sops-file-error*")))
          ;; preserve directory on body failure, to aid debugging
          (delete-directory default-directory t)))))
 

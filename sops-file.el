@@ -167,7 +167,7 @@
         (if (equal (process-exit-status sops) 0)
             (progn
               (erase-buffer)
-              (insert-buffer stderr))
+              (insert-buffer-substring stderr))
           (save-excursion
             (funcall sops-file-error-renderer stderr)))
         (funcall sops-file-mode-inferrer))))

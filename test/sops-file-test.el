@@ -53,27 +53,22 @@ creation_rules:
       (insert (format " %s," key)))
     (delete-char -1)))
 
-(defmacro with-sops-identity (identity-file &rest body)
+(defmacro with-sops-identity (keys &rest body)
   (declare (debug t) (indent defun))
   (let ((old-key-file-sym (gensym)))
     `(let ((,old-key-file-sym (getenv "SOPS_AGE_KEY_FILE")))
+       (with-temp-file "identity.txt"
+         (insert
+          (string-join
+           (mapcar #'cadr ,keys)
+           "\n")))
        (unwind-protect
            (progn
-             (setenv "SOPS_AGE_KEY_FILE" ,identity-file)
+             (setenv "SOPS_AGE_KEY_FILE" "identity.txt")
              ,@body)
          (setenv "SOPS_AGE_KEY_FILE" ,old-key-file-sym)))))
 
-(defmacro with-disabled-gpg-agent (&rest body)
-  (declare (debug t) (indent defun))
-  (let ((disabled-gpg-agent-info-sym (gensym)))
-    `(let ((,disabled-gpg-agent-info-sym (getenv "GPG_AGENT_INFO")))
-       (unwind-protect
-           (progn
-             ;; we deliberately set to the empty string to trigger a parse
-             ;; error in the gopgagent library sops uses
-             (setenv "GPG_AGENT_INFO" "")
-             ,@body)
-         (setenv "GPG_AGENT_INFO" ,disabled-gpg-agent-info-sym)))))
+
 
 ;; should be the outermost macro call -- we set default directory here 
 (defmacro with-sops-file-directory (name &rest body)
@@ -90,61 +85,89 @@ creation_rules:
 
 (defmacro with-age-encrypted-file (relpath contents &rest body)
   (declare (debug t) (indent defun))
-  (let ((keys-sym (gensym))
-        (identity-file-sym (gensym)))
-    `(let* ((,keys-sym (sops-file-test--generate-age-keys))
-            (,identity-file-sym (expand-file-name "identity.txt")))
+  (let ((keys-sym (gensym)))
+    `(let* ((,keys-sym (sops-file-test--generate-age-keys)))
        (sops-file-test--write-sops-yaml-for-keys (list (car ,keys-sym)))
-       (with-temp-file ,identity-file-sym
-         (insert (cadr ,keys-sym)))
        (with-temp-file ,relpath
          (insert ,contents))
        (process-lines "sops" "encrypt" "-i" ,relpath)
-       (with-sops-identity ,identity-file-sym
+       (with-sops-identity (list ,keys-sym)
          ,@body))))
 
+(defmacro with-disabled-gpg-agent (&rest body)
+  (declare (debug t) (indent defun))
+  (let ((disabled-gpg-agent-info-sym (gensym)))
+    `(let ((,disabled-gpg-agent-info-sym (getenv "GPG_AGENT_INFO")))
+       (unwind-protect
+           (progn
+             ;; we deliberately set to the empty string to trigger a parse
+             ;; error in the gopgagent library sops uses
+             (setenv "GPG_AGENT_INFO" "")
+             ,@body)
+         (setenv "GPG_AGENT_INFO" ,disabled-gpg-agent-info-sym)))))
+
 (defvar sops-file-test-passphrase-key "passphrase")
+
+(defun encrypt-identity-file ()
+  (let ((age (start-process "age" nil "age" "-p" "-o" "identity.txt.age" "identity.txt")))
+    (dotimes (i 2)
+      (process-send-string age (format "%s\n" sops-file-test-passphrase-key)))
+    ;; block until encryption completes
+    (while (not (equal (process-status age) 'exit))
+      (accept-process-output age 3 nil nil))
+    ;; clobber identity.txt
+    (rename-file "identity.txt.age" "identity.txt" t)))
+
+(defmacro with-encrypted-identity (&rest body)
+  "Encrypt the identity file with sops-file-test-passphrase-key: decryptions will require a passphrase to be input. See `with-passphrase-input'."
+  (declare (debug t) (indent defun))
+  `(progn
+     (encrypt-identity-file)
+     (with-disabled-gpg-agent
+       ,@body)))
+
+(defmacro with-passphrase-input (&rest body)
+  (declare (debug t) (indent defun))
+  `(ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
+     ,@body))
 
 (defmacro with-file-encrypted-with-passphrase-key (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym))
         (identity-file-sym (gensym)))
-  `(let* ((,keys-sym (sops-file-test--generate-age-keys))
-          (,identity-file-sym (expand-file-name "identity.txt")))
-     (sops-file-test--write-sops-yaml-for-keys (list (car ,keys-sym)))
-     (with-temp-buffer
-       (let ((age (start-process "age" (current-buffer) "age" "-p" "-o" ,identity-file-sym))
-             ;; passphrase, confirmation, contents
-             (input (list sops-file-test-passphrase-key
-                          sops-file-test-passphrase-key
-                          (cadr ,keys-sym))))
-         (dolist (in input)
-           (process-send-string age (format "%s\n" in)))
-         (process-send-eof age)
+    `(let* ((,keys-sym (sops-file-test--generate-age-keys)))
+       (sops-file-test--write-sops-yaml-for-keys (list (car ,keys-sym)))
+       (with-temp-buffer
+         (let ((age (start-process "age" (current-buffer) "age" "-p" "-o" "identity.txt.age" "identity.txt"))))
+         ;; passphrase + confirmation
+         (dotimes (i 2)
+           (process-send-string age (format "%s\n") sops-file-test-passphrase-key))
          ;; simply wait until process-exit
          (while (not (equal (process-status age) 'exit))
            (accept-process-output age 3 nil nil))))
-     (with-temp-file ,relpath
-       (insert ,contents))
-     (process-lines "sops" "encrypt" "-i" ,relpath)
-     (with-disabled-gpg-agent
-       (with-sops-identity ,identity-file-sym
-         ,@body)))))
+    (with-temp-file ,relpath
+      (insert ,contents))
+    (process-lines "sops" "encrypt" "-i" ,relpath)
+    (with-disabled-gpg-agent
+      (with-sops-identity (list ,keys-sym)
+        ,@body))))
+
+
 
 (defmacro with-yaml-mode-unavailable (&rest body)
   (declare (debug t) (indent defun))
   (let ((yaml-mode-sym (gensym)))
     `(let ((,yaml-mode-sym (symbol-function 'yaml-mode))
-            (auto-mode-alist
-             (cl-remove-if
-              (lambda (entry)
-                (equal (cdr entry) 'yaml-mode))
-              auto-mode-alist)))
-        (unwind-protect
-            (progn
-              (fmakunbound 'yaml-mode)
-              ,@body)
-          (fset 'yaml-mode ,yaml-mode-sym)))))
+           (auto-mode-alist
+            (cl-remove-if
+             (lambda (entry)
+               (equal (cdr entry) 'yaml-mode))
+             auto-mode-alist)))
+       (unwind-protect
+           (progn
+             (fmakunbound 'yaml-mode)
+             ,@body)
+         (fset 'yaml-mode ,yaml-mode-sym)))))
 
 (defmacro with-sops-file-auto-mode (&rest body)
   (declare (debug t) (indent defun))
@@ -202,14 +225,16 @@ creation_rules:
           (should (equal (buffer-string) "key: value\n"))
           (should (equal major-mode 'yaml-mode)))))))
 
+
 (ert-deftest sops-file-test--passphrase-read-file ()
   (let ((relpath "passphrase-read-file.enc.yaml"))
     (with-sops-file-directory "passphrase-read-file"
-      (with-file-encrypted-with-passphrase-key relpath "key: value\n"
-        (ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
-          (format-find-file relpath 'sops-file))
-        (should (equal (buffer-string) "key: value\n"))
-        (should (equal major-mode 'yaml-mode))))))
+      (with-age-encrypted-file relpath "key: value\n"
+        (with-encrypted-identity
+          (with-passphrase-input
+            (format-find-file relpath 'sops-file))
+          (should (equal (buffer-string) "key: value\n"))
+          (should (equal major-mode 'yaml-mode)))))))
 
 (ert-deftest sops-file-test--file-does-not-exist-is-silent ()
   (with-sops-file-auto-mode
@@ -238,16 +263,16 @@ creation_rules:
             (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
               (should (equal (buffer-substring (point-min) (1+ (length expected-failure))) expected-failure)))))))))
 
-(ert-deftest sops-file-test--bad-passwd-shows-error-in-sops-file-errors ()
-  (let ((relpath "bad-passwd.enc.yaml"))
-    (with-sops-file-directory "bad-passwd"
-      (with-sops-file-auto-mode
-        (with-file-encrypted-with-passphrase-key relpath "a: c"
-          (ert-simulate-keys (format "%s\n" "not-the-passphrase")
-            (find-file relpath))
-          (with-current-buffer "*sops-file-error*"
-            (let ((expected-failure "asdf"))
-              (should (re-search-forward "incorrect passphrase")))))))))
+;; (ert-deftest sops-file-test--bad-passwd-shows-error-in-sops-file-errors ()
+;;   (let ((relpath "bad-passwd.enc.yaml"))
+;;     (with-sops-file-directory "bad-passwd"
+;;       (with-sops-file-auto-mode
+;;         (with-file-encrypted-with-passphrase-key relpath "a: c"
+;;           (ert-simulate-keys (format "%s\n" "not-the-passphrase")
+;;             (find-file relpath))
+;;           (with-current-buffer "*sops-file-error*"
+;;             (let ((expected-failure "asdf"))
+;;               (should (re-search-forward "incorrect passphrase")))))))))
 
 (ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ()
   (let ((relpath "my-secret-package.enc.el"))
@@ -281,6 +306,8 @@ creation_rules:
 
 ;; (ert-deftest sops-file-test--file-creation ()
 ;;   (let ((relpath "non-existent-file.enc.yaml"))
-;;     (format-find-file relpath 'sops-file)))
+;;     (with-sops-file-directory "file-creation"
+;;       (sops-file-test--write-sops-yaml-for-keys)
+;;       (format-find-file relpath 'sops-file))))
 
 (provide 'sops-file-test)

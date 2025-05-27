@@ -68,8 +68,6 @@ creation_rules:
              ,@body)
          (setenv "SOPS_AGE_KEY_FILE" ,old-key-file-sym)))))
 
-
-
 ;; should be the outermost macro call -- we set default directory here 
 (defmacro with-sops-file-directory (name &rest body)
   (declare (debug t) (indent defun))
@@ -79,6 +77,7 @@ creation_rules:
        (let* ((default-directory
                (make-temp-file
                 (expand-file-name ,name ,sops-file-test-root) t)))
+         ;; TODO: here's the best place to kill the sops-file-error buffer
          ,@body
          ;; preserve directory on body failure, to aid debugging
          (delete-directory default-directory t)))))
@@ -126,33 +125,10 @@ creation_rules:
      (with-disabled-gpg-agent
        ,@body)))
 
-(defmacro with-passphrase-input (&rest body)
+(defmacro with-passphrase-input (passphrase &rest body)
   (declare (debug t) (indent defun))
-  `(ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
+  `(ert-simulate-keys (format "%s\n" ,passphrase)
      ,@body))
-
-(defmacro with-file-encrypted-with-passphrase-key (relpath contents &rest body)
-  (declare (debug t) (indent defun))
-  (let ((keys-sym (gensym))
-        (identity-file-sym (gensym)))
-    `(let* ((,keys-sym (sops-file-test--generate-age-keys)))
-       (sops-file-test--write-sops-yaml-for-keys (list (car ,keys-sym)))
-       (with-temp-buffer
-         (let ((age (start-process "age" (current-buffer) "age" "-p" "-o" "identity.txt.age" "identity.txt"))))
-         ;; passphrase + confirmation
-         (dotimes (i 2)
-           (process-send-string age (format "%s\n") sops-file-test-passphrase-key))
-         ;; simply wait until process-exit
-         (while (not (equal (process-status age) 'exit))
-           (accept-process-output age 3 nil nil))))
-    (with-temp-file ,relpath
-      (insert ,contents))
-    (process-lines "sops" "encrypt" "-i" ,relpath)
-    (with-disabled-gpg-agent
-      (with-sops-identity (list ,keys-sym)
-        ,@body))))
-
-
 
 (defmacro with-yaml-mode-unavailable (&rest body)
   (declare (debug t) (indent defun))
@@ -231,7 +207,7 @@ creation_rules:
     (with-sops-file-directory "passphrase-read-file"
       (with-age-encrypted-file relpath "key: value\n"
         (with-encrypted-identity
-          (with-passphrase-input
+          (with-passphrase-input sops-file-test-passphrase-key
             (format-find-file relpath 'sops-file))
           (should (equal (buffer-string) "key: value\n"))
           (should (equal major-mode 'yaml-mode)))))))
@@ -263,16 +239,16 @@ creation_rules:
             (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
               (should (equal (buffer-substring (point-min) (1+ (length expected-failure))) expected-failure)))))))))
 
-;; (ert-deftest sops-file-test--bad-passwd-shows-error-in-sops-file-errors ()
-;;   (let ((relpath "bad-passwd.enc.yaml"))
-;;     (with-sops-file-directory "bad-passwd"
-;;       (with-sops-file-auto-mode
-;;         (with-file-encrypted-with-passphrase-key relpath "a: c"
-;;           (ert-simulate-keys (format "%s\n" "not-the-passphrase")
-;;             (find-file relpath))
-;;           (with-current-buffer "*sops-file-error*"
-;;             (let ((expected-failure "asdf"))
-;;               (should (re-search-forward "incorrect passphrase")))))))))
+(ert-deftest sops-file-test--bad-passwd-shows-error-in-sops-file-errors ()
+  (let ((relpath "bad-passwd.enc.yaml"))
+    (with-sops-file-directory "passphrase-read-file"
+      (with-sops-file-auto-mode
+        (with-age-encrypted-file relpath "key: value\n"
+          (with-encrypted-identity
+            (with-passphrase-input "not-the-phrase"
+              (find-file relpath))
+            (with-current-buffer "*sops-file-error*"
+              (should (re-search-forward "incorrect passphrase")))))))))
 
 (ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ()
   (let ((relpath "my-secret-package.enc.el"))

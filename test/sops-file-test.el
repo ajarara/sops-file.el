@@ -172,17 +172,28 @@ creation_rules:
          ,@body)
      (sops-file-auto-mode -1)))
 
-(ert-deftest sops-file-test--read-file ()
-  (let ((relpath "read-file.enc.yaml")
-        (contents "key: value\n"))
-    (with-sops-file-directory "read-file"
-      ;; generate keys
-      ;; write those keys to sops
-      
-      (with-age-encrypted-file relpath contents
-        (format-find-file relpath 'sops-file)
-        (should (equal (buffer-string) contents))
-        (should (equal major-mode 'yaml-mode))))))
+;; the default test setup -- creates a directory under sops-test-file
+;; and sets the default directory to it.
+;; we don't bother updating docstrings.
+(cl-defmacro sops-file-test (name () &body body)
+  (declare (debug t) (indent defun))
+  (let ((sops-file-test-root (expand-file-name "sops-file-tests" temporary-file-directory)))
+    `(ert-deftest ,(intern (format "sops-file-test--%s" name)) ()
+       (progn
+         (mkdir ,sops-file-test-root t)
+         (let ((default-directory
+                (make-temp-file
+                 (expand-file-name ,(symbol-name name) temporary-file-directory) t)))
+           (unwind-protect
+               (progn ,@body)
+             (ignore-errors "*sops-file-error*"))
+           (delete-directory default-directory t))))))
+
+(sops-file-test read-file ()
+  (with-age-encrypted-file "read-file.enc.yaml" "a: c\n"
+    (format-find-file "read-file.enc.yaml" 'sops-file)
+    (should (equal (buffer-string) "a: c\n"))
+    (should (equal major-mode 'yaml-mode))))
 
 (ert-deftest sops-file-test--major-mode-respects-contents ()
   (let ((relpath "respects-contents"))

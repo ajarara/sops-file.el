@@ -179,7 +179,8 @@ creation_rules:
       (with-age-encrypted-file relpath "#!/usr/bin/env sh"
         (save-current-buffer
           (format-find-file relpath 'sops-file)
-          (replace-string "sh" "awk")
+          (while (search-forward "sh" nil t)
+            (replace-match "awk" nil t))
           (save-buffer)
           (kill-buffer))
         (format-find-file relpath 'sops-file)
@@ -227,7 +228,7 @@ creation_rules:
         (find-file ".sops.yaml")
         (let ((retrieved (buffer-string))
               (on-disk (with-temp-buffer
-                         (insert-file ".sops.yaml")
+                         (insert-file-contents ".sops.yaml")
                          (buffer-string))))
           (should (equal retrieved on-disk)))))))
 
@@ -251,6 +252,7 @@ creation_rules:
             (with-passphrase-input "not-the-phrase"
               (find-file relpath))
             (with-current-buffer "*sops-file-error*"
+              (goto-char (point-min))
               (should (re-search-forward "incorrect passphrase")))))))))
 
 (ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ()

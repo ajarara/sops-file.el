@@ -65,7 +65,7 @@
     (with-current-buffer (get-buffer-create "*sops-file-error*")
       (let ((buffer-read-only nil))
         (erase-buffer)
-        (insert-buffer stderr-buf))
+        (insert-buffer-substring stderr-buf))
       (special-mode)
       (message "Could not decrypt visited file, see *sops-file-error* for sops output")))
   "Report sops error (likely decryption) to the user."
@@ -179,7 +179,7 @@
   (let* ((output-buffer (current-buffer))
          (transformed
           (with-temp-buffer
-            (insert-buffer orig-buf)
+            (insert-buffer-substring orig-buf)
             (apply 'call-process-region
                    from
                    to

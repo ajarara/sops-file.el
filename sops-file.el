@@ -130,46 +130,47 @@
     (error "Cannot handle partial decoding"))
   (unless sops-file--is-visiting
     (setq sops-file--is-visiting t)
-    (let* ((stdout (generate-new-buffer "*sops-file-stdout*" t))
-           (stderr (generate-new-buffer "*sops-file-stderr*" t))
-           (sops
-            (make-process
-             :name "sops"
-             :command `("sops"
-                        ,@sops-file-decrypt-args
-                        "--filename-override"
-                        ,buffer-file-name
-                        "--output"
-                        "/dev/stderr")
-             :buffer stdout
-             :sentinel #'ignore
-             :stderr stderr)))
-      (set-process-sentinel (get-buffer-process stderr) #'ignore)
-      (process-send-region sops from to)
-      (process-send-eof sops)
-      (accept-process-output sops 1)
-      (with-current-buffer stdout
-        (if-let ((_
-                  (cl-loop
-                   for prompt in '("Enter passphrase for"
-                                   "Enter PIN for")
-                   when (save-excursion
-                          (goto-char (point-min))
-                          (re-search-forward prompt nil t))
-                   return t))
-                 (passwd (read-passwd (buffer-string))))
-            (process-send-string
-                 sops
-                 (format "%s\n" passwd))))
-      (while (equal (process-status sops) 'run)
-        (accept-process-output sops 1))
-      (if (equal (process-exit-status sops) 0)
-          (progn
-            (erase-buffer)
-            (insert-buffer stderr))
-        (save-excursion
-          (funcall sops-file-error-renderer stderr)))))
-  (funcall sops-file-mode-inferrer)
+    (when (file-exists-p buffer-file-name)
+      (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
+             (stderr (generate-new-buffer " *sops-file-stderr*" t))
+             (sops
+              (make-process
+               :name "sops"
+               :command `("sops"
+                          ,@sops-file-decrypt-args
+                          "--filename-override"
+                          ,buffer-file-name
+                          "--output"
+                          "/dev/stderr")
+               :buffer stdout
+               :sentinel #'ignore
+               :stderr stderr)))
+        (set-process-sentinel (get-buffer-process stderr) #'ignore)
+        (process-send-region sops from to)
+        (process-send-eof sops)
+        (accept-process-output sops 1)
+        (with-current-buffer stdout
+          (if-let ((_
+                    (cl-loop
+                     for prompt in '("Enter passphrase for"
+                                     "Enter PIN for")
+                     when (save-excursion
+                            (goto-char (point-min))
+                            (re-search-forward prompt nil t))
+                     return t))
+                   (passwd (read-passwd (buffer-string))))
+              (process-send-string
+               sops
+               (format "%s\n" passwd))))
+        (while (equal (process-status sops) 'run)
+          (accept-process-output sops 1))
+        (if (equal (process-exit-status sops) 0)
+            (progn
+              (erase-buffer)
+              (insert-buffer stderr))
+          (save-excursion
+            (funcall sops-file-error-renderer stderr)))
+        (funcall sops-file-mode-inferrer))))
   (point-max))
 
 (defun sops-file-encode (from to orig-buf)

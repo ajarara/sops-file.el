@@ -44,7 +44,7 @@
         (setq private-key (match-string 1)))
       (list public-key private-key))))
 
-(defun sops-file-test--yaml-for-keys (public-keys)
+(defun sops-file-test--write-sops-yaml-for-keys (public-keys)
   (with-temp-file ".sops.yaml"
     (insert "
 creation_rules:
@@ -75,39 +75,43 @@ creation_rules:
              ,@body)
          (setenv "GPG_AGENT_INFO" ,disabled-gpg-agent-info-sym)))))
 
+;; should be the outermost macro call -- we set default directory here 
+(defmacro with-sops-file-directory (name &rest body)
+  (declare (debug t) (indent defun))
+  (let ((sops-file-test-root (expand-file-name  "sops-file-tests" temporary-file-directory)))
+    `(progn
+       (mkdir ,sops-file-test-root t)
+       (let* ((default-directory
+               (make-temp-file
+                (expand-file-name ,name ,sops-file-test-root) t)))
+         ,@body
+         ;; preserve directory on body failure, to aid debugging
+         (delete-directory default-directory t)))))
+
 (defmacro with-age-encrypted-file (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym))
-        (sops-yaml-sym (gensym))
-        (test-dir-sym (gensym))
         (identity-file-sym (gensym)))
     `(let* ((,keys-sym (sops-file-test--generate-age-keys))
-            (,test-dir-sym (make-temp-file "sops-file-test--" t))
-            (default-directory ,test-dir-sym)
-            (,sops-yaml-sym (sops-file-test--yaml-for-keys (list (car ,keys-sym))))
             (,identity-file-sym (expand-file-name "identity.txt")))
+       (sops-file-test--write-sops-yaml-for-keys (list (car ,keys-sym)))
        (with-temp-file ,identity-file-sym
          (insert (cadr ,keys-sym)))
        (with-temp-file ,relpath
          (insert ,contents))
        (process-lines "sops" "encrypt" "-i" ,relpath)
        (with-sops-identity ,identity-file-sym
-         ,@body)
-       (delete-directory ,test-dir-sym t))))
+         ,@body))))
 
 (defvar sops-file-test-passphrase-key "passphrase")
 
 (defmacro with-file-encrypted-with-passphrase-key (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym))
-        (sops-yaml-sym (gensym))
-        (test-dir-sym (gensym))
         (identity-file-sym (gensym)))
   `(let* ((,keys-sym (sops-file-test--generate-age-keys))
-          (,sops-yaml-sym (sops-file-test--yaml-for-keys (list (car ,keys-sym))))
-          (,test-dir-sym (make-temp-file "sops-file-test--" t))
-          (default-directory ,test-dir-sym)
           (,identity-file-sym (expand-file-name "identity.txt")))
+     (sops-file-test--write-sops-yaml-for-keys (list (car ,keys-sym)))
      (with-temp-buffer
        (let ((age (start-process "age" (current-buffer) "age" "-p" "-o" ,identity-file-sym))
              ;; passphrase, confirmation, contents
@@ -120,16 +124,12 @@ creation_rules:
          ;; simply wait until process-exit
          (while (not (equal (process-status age) 'exit))
            (accept-process-output age 3 nil nil))))
-     (with-temp-file (expand-file-name ".sops.yaml")
-       (insert ,sops-yaml-sym))
      (with-temp-file ,relpath
        (insert ,contents))
      (process-lines "sops" "encrypt" "-i" ,relpath)
      (with-disabled-gpg-agent
-      (with-sops-identity ,identity-file-sym
-        ,@body))
-     ;; preserve directory on body failure, to aid debugging
-     (delete-directory ,test-dir-sym t))))
+       (with-sops-identity ,identity-file-sym
+         ,@body)))))
 
 (defmacro with-yaml-mode-unavailable (&rest body)
   (declare (debug t) (indent defun))
@@ -157,114 +157,130 @@ creation_rules:
 (ert-deftest sops-file-test--read-file ()
   (let ((relpath "read-file.enc.yaml")
         (contents "key: value\n"))
-    (with-age-encrypted-file relpath contents
-      (format-find-file relpath 'sops-file)
-      (should (equal (buffer-string) contents))
-      (should (equal major-mode 'yaml-mode)))))
+    (with-sops-file-directory "read-file"
+      (with-age-encrypted-file relpath contents
+        (format-find-file relpath 'sops-file)
+        (should (equal (buffer-string) contents))
+        (should (equal major-mode 'yaml-mode))))))
 
 (ert-deftest sops-file-test--major-mode-respects-contents ()
   (let ((relpath "respects-contents"))
-    (with-age-encrypted-file relpath "#!/usr/bin/env sh"
-      (format-find-file relpath 'sops-file)
-      (should (equal (buffer-string) "#!/usr/bin/env sh"))
-      (should (equal major-mode 'sh-mode)))))
+    (with-sops-file-directory "respects-contents"
+      (with-age-encrypted-file relpath "#!/usr/bin/env sh"
+        (format-find-file relpath 'sops-file)
+        (should (equal (buffer-string) "#!/usr/bin/env sh"))
+        (should (equal major-mode 'sh-mode))))))
 
 (ert-deftest sops-file-test--updates-are-saved ()
   (let ((relpath "updates-saved"))
-    (with-age-encrypted-file relpath "#!/usr/bin/env sh"
-      (save-current-buffer
+    (with-sops-file-directory "updates-saved"
+      (with-age-encrypted-file relpath "#!/usr/bin/env sh"
+        (save-current-buffer
+          (format-find-file relpath 'sops-file)
+          (replace-string "sh" "awk")
+          (save-buffer)
+          (kill-buffer))
         (format-find-file relpath 'sops-file)
-        (replace-string "sh" "awk")
-        (save-buffer)
-        (kill-buffer))
-      (format-find-file relpath 'sops-file)
-      (should (equal major-mode 'awk-mode)))))
+        (should (equal major-mode 'awk-mode))))))
 
 (ert-deftest sops-file-test--auto-mode-entry-point ()
   (let ((relpath "auto-mode-entry.enc.yaml"))
-    (with-yaml-mode-unavailable
+    (with-sops-file-directory "auto-mode-entry-point"
+      (with-yaml-mode-unavailable
+        (with-sops-file-auto-mode
+          (with-age-encrypted-file relpath "key: value\n"
+            (find-file relpath)
+            (should (equal (buffer-string) "key: value\n"))
+            (should (equal major-mode 'fundamental-mode))))))))
+
+(ert-deftest sops-file-test--yaml-mode-entry-point ()
+  (let ((relpath "yaml-mode-entry.enc.yaml"))
+    (with-sops-file-directory "yaml-mode-entry"
       (with-sops-file-auto-mode
         (with-age-encrypted-file relpath "key: value\n"
           (find-file relpath)
           (should (equal (buffer-string) "key: value\n"))
-          (should (equal major-mode 'fundamental-mode)))))))
-
-(ert-deftest sops-file-test--yaml-mode-entry-point ()
-  (let ((relpath "yaml-mode-entry.enc.yaml"))
-    (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
-        (find-file relpath)
-        (should (equal (buffer-string) "key: value\n"))
-        (should (equal major-mode 'yaml-mode))))))
+          (should (equal major-mode 'yaml-mode)))))))
 
 (ert-deftest sops-file-test--passphrase-read-file ()
   (let ((relpath "passphrase-read-file.enc.yaml"))
-    (with-file-encrypted-with-passphrase-key relpath "key: value\n"
-      (ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
-        (format-find-file relpath 'sops-file))
-      (should (equal (buffer-string) "key: value\n"))
-      (should (equal major-mode 'yaml-mode)))))
+    (with-sops-file-directory "passphrase-read-file"
+      (with-file-encrypted-with-passphrase-key relpath "key: value\n"
+        (ert-simulate-keys (format "%s\n" sops-file-test-passphrase-key)
+          (format-find-file relpath 'sops-file))
+        (should (equal (buffer-string) "key: value\n"))
+        (should (equal major-mode 'yaml-mode))))))
 
 (ert-deftest sops-file-test--file-does-not-exist-is-silent ()
   (with-sops-file-auto-mode
-   (find-file "ex.enc.yaml")
-   (should (equal (buffer-string) ""))))
+    (find-file "ex.enc.yaml")
+    (should (equal (buffer-string) ""))))
 
 (ert-deftest sops-file-test--yaml-is-not-managed-by-sops ()
-  (with-sops-file-auto-mode
-    (with-age-encrypted-file "_" "_"
-      (find-file ".sops.yaml")
-      (let ((retrieved (buffer-string))
-            (on-disk (with-temp-buffer
-                       (insert-file ".sops.yaml")
-                       (buffer-string))))
-        (should (equal retrieved on-disk))))))
+  (with-sops-file-directory "yaml-is-not-managed"
+    (with-sops-file-auto-mode
+      (with-age-encrypted-file "_" "_"
+        (find-file ".sops.yaml")
+        (let ((retrieved (buffer-string))
+              (on-disk (with-temp-buffer
+                         (insert-file ".sops.yaml")
+                         (buffer-string))))
+          (should (equal retrieved on-disk)))))))
 
 (ert-deftest sops-file-test--cannot-decrypt-shows-error-in-sops-file-errors ()
   (let ((relpath "cannot-decrypt.enc.yaml"))
-    (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
-        (setenv "SOPS_AGE_KEY_FILE")
-        (find-file relpath)
-        (with-current-buffer "*sops-file-error*"
-          (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
-            (should (equal (buffer-substring (point-min) (1+ (length expected-failure))) expected-failure))))))))
+    (with-sops-file-directory "cannot-decrypt"
+      (with-sops-file-auto-mode
+        (with-age-encrypted-file relpath "key: value\n"
+          (setenv "SOPS_AGE_KEY_FILE")
+          (find-file relpath)
+          (with-current-buffer "*sops-file-error*"
+            (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
+              (should (equal (buffer-substring (point-min) (1+ (length expected-failure))) expected-failure)))))))))
 
 (ert-deftest sops-file-test--bad-passwd-shows-error-in-sops-file-errors ()
   (let ((relpath "bad-passwd.enc.yaml"))
-    (with-sops-file-auto-mode
-      (with-file-encrypted-with-passphrase-key relpath "a: c"
-        (ert-simulate-keys (format "%s\n" "not-the-passphrase")
-          (find-file relpath))
-        (with-current-buffer "*sops-file-error*"
-          (let ((expected-failure "asdf"))
-            (should (re-search-forward "incorrect passphrase"))))))))
+    (with-sops-file-directory "bad-passwd"
+      (with-sops-file-auto-mode
+        (with-file-encrypted-with-passphrase-key relpath "a: c"
+          (ert-simulate-keys (format "%s\n" "not-the-passphrase")
+            (find-file relpath))
+          (with-current-buffer "*sops-file-error*"
+            (let ((expected-failure "asdf"))
+              (should (re-search-forward "incorrect passphrase")))))))))
 
 (ert-deftest sops-file-test--major-mode-in-filename-is-respected-after-decryption ()
   (let ((relpath "my-secret-package.enc.el"))
-    (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath ""
-        (find-file relpath)
-        (should (equal major-mode 'emacs-lisp-mode))))))
+    (with-sops-file-directory "major-mode-in-filename"
+      (with-sops-file-auto-mode
+        (with-age-encrypted-file relpath ""
+          (find-file relpath)
+          (should (equal major-mode 'emacs-lisp-mode)))))))
 
 (ert-deftest sops-file-test--re-entering-does-not-redecode ()
   (let ((relpath "re-entering-no-decode.enc.yaml"))
-    (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
-        (find-file relpath)
-        (format-find-file relpath 'sops-file)
-        (should (equal (buffer-string) "key: value\n"))))))
+    (with-sops-file-directory "re-entering-does-not-redecode"
+      (with-sops-file-auto-mode
+        (with-age-encrypted-file relpath "key: value\n"
+          (find-file relpath)
+          (format-find-file relpath 'sops-file)
+          (should (equal (buffer-string) "key: value\n")))))))
 
 (ert-deftest sops-file-test--re-encode-allows-decode ()
   (let ((relpath "re-encode-allows-decode.enc.yaml"))
-    (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
-        (find-file-literally relpath)
-        (format-decode-buffer 'sops-file)
-        (should (equal (buffer-string) "key: value\n"))
-        (format-encode-buffer 'sops-file)
-        (should (not (equal (buffer-string) "key: value\n")))
-        (format-decode-buffer 'sops-file)
-        (should (equal (buffer-string) "key: value\n"))))))
+    (with-sops-file-directory "re-encode-allows-decode"
+      (with-sops-file-auto-mode
+        (with-age-encrypted-file relpath "key: value\n"
+          (find-file-literally relpath)
+          (format-decode-buffer 'sops-file)
+          (should (equal (buffer-string) "key: value\n"))
+          (format-encode-buffer 'sops-file)
+          (should (not (equal (buffer-string) "key: value\n")))
+          (format-decode-buffer 'sops-file)
+          (should (equal (buffer-string) "key: value\n")))))))
+
+;; (ert-deftest sops-file-test--file-creation ()
+;;   (let ((relpath "non-existent-file.enc.yaml"))
+;;     (format-find-file relpath 'sops-file)))
 
 (provide 'sops-file-test)

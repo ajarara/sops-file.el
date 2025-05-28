@@ -63,6 +63,14 @@ creation_rules:
       (mapcar #'cadr keys)
       "\n"))))
 
+;; in the future we should extend this to support multiple kinds of keys
+;; but for now, we'll stick with age: gpg needs strong isolation from the daemon
+;; ssh keys might be easier to test.
+(defun sops-file-test-setup-age-key ()
+  (let ((keys (sops-file-test--generate-age-keys)))
+    (sops-file-test--write-sops-yaml-for-keys keys)
+    (sops-file-test--write-identity-for-keys keys)))
+
 (defmacro with-sops-identity (keys &rest body)
   (declare (debug t) (indent defun))
   (let ((old-key-file-sym (gensym)))
@@ -128,6 +136,7 @@ creation_rules:
 
 (defun sops-file-test-age-encrypt-identity-file ()
   (let ((age (start-process "age" nil "age" "-p" "-o" "identity.txt.age" "identity.txt")))
+    ;; we send twice because age requests confirmation
     (dotimes (i 2)
       (process-send-string age (format "%s\n" sops-file-test-passphrase-key)))
     ;; block until encryption completes
@@ -192,9 +201,7 @@ creation_rules:
 (sops-file-test read-file ()
   (let ((relpath "read-file.enc.yaml")
         (contents "a: c\n"))
-    (let ((keys (sops-file-test--generate-age-keys)))
-      (sops-file-test--write-sops-yaml-for-keys keys)
-      (sops-file-test--write-identity-for-keys keys))
+    (sops-file-test-setup-age-key)
     (with-output-to-encrypted-sops-file relpath
       (insert contents))
     (with-sops-identity-file 
@@ -204,14 +211,20 @@ creation_rules:
 
 (sops-file-test major-mode-respects-contents ()
   (let ((relpath "respects-contents"))
-    (with-age-encrypted-file relpath "#!/usr/bin/env sh"
-      (format-find-file relpath 'sops-file)
-      (should (equal (buffer-string) "#!/usr/bin/env sh"))
-      (should (equal major-mode 'sh-mode)))))
+    (sops-file-test-setup-age-key)
+    (with-output-to-encrypted-sops-file relpath
+      (insert "#!/usr/bin/env sh"))
+    (with-sops-identity-file
+      (format-find-file relpath 'sops-file))
+    (should (equal (buffer-string) "#!/usr/bin/env sh"))
+    (should (equal major-mode 'sh-mode))))
 
 (sops-file-test updates-are-saved ()
   (let ((relpath "updates-saved"))
-    (with-age-encrypted-file relpath "#!/usr/bin/env sh"
+    (sops-file-test-setup-age-key)
+    (with-output-to-encrypted-sops-file relpath
+      (insert "#!/usr/bin/env sh"))
+    (with-sops-identity-file
       (save-current-buffer
         (format-find-file relpath 'sops-file)
         (while (search-forward "sh" nil t)
@@ -223,12 +236,12 @@ creation_rules:
 
 (sops-file-test auto-mode-entry-point ()
   (let ((relpath "auto-mode-entry.enc.yaml"))
-  (with-yaml-mode-unavailable
-    (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
-        (find-file relpath)
-        (should (equal (buffer-string) "key: value\n"))
-        (should (equal major-mode 'fundamental-mode)))))))
+    (with-yaml-mode-unavailable
+      (with-sops-file-auto-mode
+        (with-age-encrypted-file relpath "key: value\n"
+          (find-file relpath)
+          (should (equal (buffer-string) "key: value\n"))
+          (should (equal major-mode 'fundamental-mode)))))))
 
 (sops-file-test yaml-mode-entry-point ()
   (let ((relpath "yaml-mode-entry.enc.yaml"))

@@ -164,8 +164,12 @@
               (process-send-string
                sops
                (format "%s\n" passwd))))
-        (while (equal (process-status sops) 'run)
-          (accept-process-output sops 1))
+        (cl-loop for i from 1 to 5
+                 do
+                 (if (not (equal (process-status sops) 'run))
+                     (cl-return)
+                   (accept-process-output sops 1))
+                 finally (error "Sops is not decrypting, bailing. This is likely a bug in sops-file."))
         (if (equal (process-exit-status sops) 0)
             (progn
               (erase-buffer)

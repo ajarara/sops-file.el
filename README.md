@@ -1,5 +1,5 @@
 # sops-file.el
-A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey).
+A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey). It will work out of the box for anything using graphical pinentry.
 
 # requirements
 - sops minimum version 3.10.2 (latest as of 5/20/25)
@@ -25,6 +25,8 @@ Without any configuration, users can simply do `M-x format-find-file`, select th
 
 Users are welcome to attach `sops-file-entry-hook` to any major mode they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to *sops-file-error*.
 
+Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on a new file: provided sops has a creation rule for it you should be fine.
+
 # api
 Users shouldn't need to integrate with sops-file through writing code: for now it exposes no hooks and integrates with emacs directly. It might be useful to think of this package as:
 - the sops-file format registration
@@ -33,7 +35,7 @@ Users shouldn't need to integrate with sops-file through writing code: for now i
 # roadmap
 I'm not sure when to define stability, I'd prefer to let this soak with some users before claiming stability. However there are some features I know need to be implemented to be a comprehensive experience. 
 - Keygroup handling: sops can ask multiple times for passphrases for a single decryption pass
-- Partially encrypted files (this may work already given we delegate completely to sops, it's just untested)
+- GPG support: testing interactively, this works only with graphical pinentry: dropping into a tty and attempting to decrypt causes a "Operation cancelled error". In theory it should be as simple as figuring out what sops prints as the prompt for the pin/passphrase and adding it to the prompts in `sops-file-decode`.
 
 ## inspirations
 epa-file, [sops.el](https://github.com/djgoku/sops), rot13

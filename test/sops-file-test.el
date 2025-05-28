@@ -46,14 +46,13 @@
          (setq private-key (match-string 1)))
        (list public-key private-key)))))
 
-(defun sops-file-test--write-sops-yaml-for-keys (keys)
-  (with-temp-file ".sops.yaml"
-    (insert "
+(defun sops-file--add-creation-rules (keys)
+  (insert "
 creation_rules:
   - age:")
     (dolist (key keys)
       (insert (format " %s," (car key))))
-    (delete-char -1)))
+    (delete-char -1))
 
 (defun sops-file-test--write-identity-for-keys (keys)
   (with-temp-file "identity.txt"
@@ -65,7 +64,8 @@ creation_rules:
 (defun sops-file-test-setup-single-age-key ()
   "Generate a single age key, write it to disk as an identity and in the creation_rules"
   (let ((keys (sops-file-test--generate-age-keys)))
-    (sops-file-test--write-sops-yaml-for-keys keys)
+    (with-temp-file ".sops.yaml"
+      (sops-file--add-creation-rules keys))
     (sops-file-test--write-identity-for-keys keys)))
 
 (defmacro with-sops-identity (keys &rest body)
@@ -346,5 +346,24 @@ creation_rules:
       (format-find-file relpath 'sops-file)))
       (should (equal (buffer-string) "key: value\n")))
 
+
+(sops-file-test partial-decryption ()
+  (let* ((relpath "partially.enc.yaml")
+         (keys (sops-file-test--generate-age-keys 1)))
+    (sops-file-test--write-identity-for-keys keys)
+    (with-temp-file ".sops.yaml"
+      (sops-file--add-creation-rules keys)
+      (insert "
+    unencrypted_comment_regex: noencrypt"))
+    (with-sops-identity-file
+      (format-find-file relpath 'sops-file)
+      (insert "
+key: value
+other: should-be-cleartext # noencrypt")
+      (save-buffer)
+      (with-temp-buffer
+        (insert-file-contents-literally relpath)
+        (should (not (re-search-forward "key: value" nil t)))
+        (should (re-search-forward "other: should-be-cleartext"))))))
 
 (provide 'sops-file-test)

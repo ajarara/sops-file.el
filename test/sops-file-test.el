@@ -32,7 +32,6 @@
 (require 'sops-file)
 (require 'json)
 
-
 (defun sops-file-test--generate-age-keys (&optional count)
   (cl-loop
    repeat (or count 1)
@@ -66,7 +65,7 @@ creation_rules:
 ;; in the future we should extend this to support multiple kinds of keys
 ;; but for now, we'll stick with age: gpg needs strong isolation from the daemon
 ;; ssh keys might be easier to test.
-(defun sops-file-test-setup-age-key ()
+(defun sops-file-test-setup-single-age-key ()
   (let ((keys (sops-file-test--generate-age-keys)))
     (sops-file-test--write-sops-yaml-for-keys keys)
     (sops-file-test--write-identity-for-keys keys)))
@@ -201,7 +200,7 @@ creation_rules:
 (sops-file-test read-file ()
   (let ((relpath "read-file.enc.yaml")
         (contents "a: c\n"))
-    (sops-file-test-setup-age-key)
+    (sops-file-test-setup-single-age-key)
     (with-output-to-encrypted-sops-file relpath
       (insert contents))
     (with-sops-identity-file 
@@ -211,7 +210,7 @@ creation_rules:
 
 (sops-file-test major-mode-respects-contents ()
   (let ((relpath "respects-contents"))
-    (sops-file-test-setup-age-key)
+    (sops-file-test-setup-single-age-key)
     (with-output-to-encrypted-sops-file relpath
       (insert "#!/usr/bin/env sh"))
     (with-sops-identity-file
@@ -221,7 +220,7 @@ creation_rules:
 
 (sops-file-test updates-are-saved ()
   (let ((relpath "updates-saved"))
-    (sops-file-test-setup-age-key)
+    (sops-file-test-setup-single-age-key)
     (with-output-to-encrypted-sops-file relpath
       (insert "#!/usr/bin/env sh"))
     (with-sops-identity-file
@@ -236,24 +235,33 @@ creation_rules:
 
 (sops-file-test auto-mode-entry-point ()
   (let ((relpath "auto-mode-entry.enc.yaml"))
+    (sops-file-test-setup-single-age-key)
     (with-yaml-mode-unavailable
       (with-sops-file-auto-mode
-        (with-age-encrypted-file relpath "key: value\n"
-          (find-file relpath)
-          (should (equal (buffer-string) "key: value\n"))
-          (should (equal major-mode 'fundamental-mode)))))))
+        (with-output-to-encrypted-sops-file relpath
+          (insert "key: value\n"))
+        (with-sops-identity-file
+          (find-file relpath))
+        (should (equal (buffer-string) "key: value\n"))
+        (should (equal major-mode 'fundamental-mode))))))
 
 (sops-file-test yaml-mode-entry-point ()
   (let ((relpath "yaml-mode-entry.enc.yaml"))
+    (sops-file-test-setup-single-age-key)
     (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
-        (find-file relpath)
-        (should (equal (buffer-string) "key: value\n"))
-        (should (equal major-mode 'yaml-mode))))))
+      (with-output-to-encrypted-sops-file relpath
+        (insert "key: value\n"))
+      (with-sops-identity-file
+        (find-file relpath))
+      (should (equal (buffer-string) "key: value\n"))
+      (should (equal major-mode 'yaml-mode)))))
 
 (sops-file-test passphrase-read-file ()
   (let ((relpath "passphrase-read-file.enc.yaml"))
-    (with-age-encrypted-file relpath "key: value\n"
+    (sops-file-test-setup-single-age-key)
+    (with-output-to-encrypted-sops-file relpath
+      (insert "key: value\n"))
+    (with-sops-identity-file 
       (with-encrypted-identity
         (with-passphrase-input sops-file-test-passphrase-key
           (format-find-file relpath 'sops-file))

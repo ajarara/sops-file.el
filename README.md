@@ -1,5 +1,5 @@
 # sops-file.el
-A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey). It will work out of the box for anything using graphical pinentry.
+A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey). It will work out of the box for anything using graphical pinentry, and as long as sops prompts for other passphrases, sops-file will forward through emacs directly.
 
 # requirements
 - sops minimum version 3.10.2 (latest as of 5/20/25)
@@ -16,16 +16,16 @@ Using straight.el:
   (sops-file-auto-mode 1))
 ```
 
-After we cut a version we'll be on melpa{-stable}
+After we cut a version we'll be on melpa{-stable}.
 
 # usage
-Without any configuration, users can simply do `M-x format-find-file`, select the file, then select format `sops-file`. Users can also, when visiting a file literally, `M-x format-decode-buffer`.
+Without any configuration, users can simply do `M-x format-find-file`, select the file, then select format `sops-file`. Users can also, when visiting a file literally, `M-x format-decode-buffer` and select `sops-file` as the format.
 
-`sops-file-auto-mode` is a global minor mode that attaches a hook to yaml-mode and installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not). If creation rules are lax, then sops-file will consider any yaml file (excepting a .sops.yaml hard-coded exclusion) as a sops file and will apply the format!
+`sops-file-auto-mode` is a global minor mode that attaches a hook to yaml-mode and installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not). If creation rules are lax, then sops-file will consider any yaml file as a sops file and will apply the format!
 
-Users are welcome to attach `sops-file-entry-hook` to any major mode they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to *sops-file-error*.
+Users are welcome to attach `sops-file-entry-hook` to any major mode they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to `*sops-file-error*`.
 
-Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on a new file: provided sops has a creation rule for it you should be fine.
+Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on a new file: provided there is a creation_rule for the path it will never hit disk decrypted.
 
 # api
 Users shouldn't need to integrate with sops-file through writing code: for now it exposes no hooks and integrates with emacs directly. It might be useful to think of this package as:

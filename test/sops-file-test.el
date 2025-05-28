@@ -33,16 +33,19 @@
 (require 'json)
 
 
-(defun sops-file-test--generate-age-keys ()
-  (with-temp-buffer
-    (call-process "age-keygen" nil (current-buffer))
-    (goto-char (point-min))
-    (let (public-key private-key)
-      (when (re-search-forward "^# public key: \\(.+\\)$" nil t)
-        (setq public-key (match-string 1)))
-      (when (re-search-forward "^\\(AGE-SECRET-KEY-.*\\)$" nil t)
-        (setq private-key (match-string 1)))
-      (list public-key private-key))))
+(defun sops-file-test--generate-age-keys (&optional count)
+  (cl-loop
+   repeat (or count 1)
+   collect
+   (with-temp-buffer
+     (call-process "age-keygen" nil (current-buffer))
+     (goto-char (point-min))
+     (let (public-key private-key)
+       (when (re-search-forward "^# public key: \\(.+\\)$" nil t)
+         (setq public-key (match-string 1)))
+       (when (re-search-forward "^\\(AGE-SECRET-KEY-.*\\)$" nil t)
+         (setq private-key (match-string 1)))
+       (list public-key private-key)))))
 
 (defun sops-file-test--write-sops-yaml-for-keys (keys)
   (with-temp-file ".sops.yaml"
@@ -71,46 +74,43 @@ creation_rules:
              ,@body)
          (setenv "SOPS_AGE_KEY_FILE" ,old-key-file-sym)))))
 
-;; should be the outermost macro call -- we set default directory here 
-(defmacro with-sops-file-directory (name &rest body)
+(defmacro with-sops-identity-file (&rest body)
   (declare (debug t) (indent defun))
-  (let ((sops-file-test-root (expand-file-name  "sops-file-tests" temporary-file-directory)))
-    `(progn
-       (mkdir ,sops-file-test-root t)
-       (let* ((default-directory
-               (make-temp-file
-                (expand-file-name ,name ,sops-file-test-root) t)))
-         (unwind-protect
-             (progn
-               ,@body)
-           (ignore-errors
-             (kill-buffer "*sops-file-error*")))
-         ;; preserve directory on body failure, to aid debugging
-         (delete-directory default-directory t)))))
+  (let ((old-key-file-sym (gensym)))
+    `(let ((,old-key-file-sym (getenv "SOPS_AGE_KEY_FILE")))
+       (unwind-protect
+           (progn
+             (setenv "SOPS_AGE_KEY_FILE" "identity.txt")
+             ,@body)
+         (setenv "SOPS_AGE_KEY_FILE" ,old-key-file-sym)))))
 
 ;; TODO should be a function, should divorce from key generation
 (defmacro with-age-encrypted-file (relpath contents &rest body)
   (declare (debug t) (indent defun))
   (let ((keys-sym (gensym)))
     `(let* ((,keys-sym (sops-file-test--generate-age-keys)))
-       (sops-file-test--write-sops-yaml-for-keys (list ,keys-sym))
+       (sops-file-test--write-sops-yaml-for-keys ,keys-sym)
        (with-temp-file ,relpath
          (insert ,contents))
        (process-lines "sops" "encrypt" "-i" ,relpath)
-       (with-sops-identity (list ,keys-sym)
+       (with-sops-identity ,keys-sym
          ,@body))))
 
-(defun sops-file-test-encrypt-buffer-to (file)
-  (should (eq 0
-              (call-process-region (point-min)
-                                   (point-max)
-                                   "sops"
-                                   nil
-                                   `(:file ,file)
-                                   nil
-                                   `("encrypt"
-                                     "--filename-override"
-                                     ,file)))))
+(defmacro with-output-to-encrypted-sops-file (file &rest body)
+  (declare (debug t) (indent defun))
+  `(with-temp-buffer
+     ,@body
+     (should
+      (eq 0
+          (call-process-region (point-min)
+                               (point-max)
+                               "sops"
+                               nil
+                               `(:file ,,file)
+                               nil
+                               "encrypt"
+                               "--filename-override"
+                               ,file)))))
 
 (defmacro with-disabled-gpg-agent (&rest body)
   (declare (debug t) (indent defun))
@@ -132,7 +132,7 @@ creation_rules:
       (process-send-string age (format "%s\n" sops-file-test-passphrase-key)))
     ;; block until encryption completes
     (while (not (equal (process-status age) 'exit))
-      (accept-process-output age 3 nil nil))
+      (accept-process-output age 0.5 nil nil))
     ;; clobber identity.txt
     (rename-file "identity.txt.age" "identity.txt" t)))
 
@@ -183,16 +183,23 @@ creation_rules:
          (mkdir ,sops-file-test-root t)
          (let ((default-directory
                 (make-temp-file
-                 (expand-file-name ,(symbol-name name) temporary-file-directory) t)))
+                 (expand-file-name ,(symbol-name name) ,sops-file-test-root) t)))
            (unwind-protect
                (progn ,@body)
              (ignore-errors "*sops-file-error*"))
            (delete-directory default-directory t))))))
 
 (sops-file-test read-file ()
-  (with-age-encrypted-file "read-file.enc.yaml" "a: c\n"
-    (format-find-file "read-file.enc.yaml" 'sops-file)
-    (should (equal (buffer-string) "a: c\n"))
+  (let ((relpath "read-file.enc.yaml")
+        (contents "a: c\n"))
+    (let ((keys (sops-file-test--generate-age-keys)))
+      (sops-file-test--write-sops-yaml-for-keys keys)
+      (sops-file-test--write-identity-for-keys keys))
+    (with-output-to-encrypted-sops-file relpath
+      (insert contents))
+    (with-sops-identity-file 
+      (format-find-file relpath 'sops-file))
+    (should (equal (buffer-string) contents))
     (should (equal major-mode 'yaml-mode))))
 
 (sops-file-test major-mode-respects-contents ()

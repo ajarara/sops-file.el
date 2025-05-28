@@ -1,5 +1,5 @@
 # sops-file.el
-A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys stored on yubikeys.
+A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey).
 
 # requirements
 - sops minimum version 3.10.2 (latest as of 5/20/25)
@@ -21,14 +21,19 @@ After we cut a version we'll be on melpa{-stable}
 # usage
 Without any configuration, users can simply do `M-x format-find-file`, select the file, then select format `sops-file`. Users can also, when visiting a file literally, `M-x format-decode-buffer`.
 
-`sops-file-auto-mode` is a global minor mode that attaches a hook to yaml-mode and installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not).
+`sops-file-auto-mode` is a global minor mode that attaches a hook to yaml-mode and installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not). If creation rules are lax, then sops-file will consider any yaml file (excepting a .sops.yaml hard-coded exclusion) as a sops file and will apply the format!
 
 Users are welcome to attach `sops-file-entry-hook` to any major mode they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to *sops-file-error*.
+
+# api
+Users shouldn't need to integrate with sops-file through writing code: for now it exposes no hooks and integrates with emacs directly. It might be useful to think of this package as:
+- the sops-file format registration
+- `sops-file-entry-hook`
 
 # roadmap
 I'm not sure when to define stability, I'd prefer to let this soak with some users before claiming stability. However there are some features I know need to be implemented to be a comprehensive experience. 
 - Keygroup handling: sops can ask multiple times for passphrases for a single decryption pass
-- Partially encrypted files (this may work already, it's just untested)
+- Partially encrypted files (this may work already given we delegate completely to sops, it's just untested)
 
 ## inspirations
 epa-file, [sops.el](https://github.com/djgoku/sops), rot13

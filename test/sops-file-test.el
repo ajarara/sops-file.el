@@ -91,18 +91,6 @@ creation_rules:
              ,@body)
          (setenv "SOPS_AGE_KEY_FILE" ,old-key-file-sym)))))
 
-;; TODO should be a function, should divorce from key generation
-(defmacro with-age-encrypted-file (relpath contents &rest body)
-  (declare (debug t) (indent defun))
-  (let ((keys-sym (gensym)))
-    `(let* ((,keys-sym (sops-file-test--generate-age-keys)))
-       (sops-file-test--write-sops-yaml-for-keys ,keys-sym)
-       (with-temp-file ,relpath
-         (insert ,contents))
-       (process-lines "sops" "encrypt" "-i" ,relpath)
-       (with-sops-identity ,keys-sym
-         ,@body))))
-
 (defmacro with-output-to-encrypted-sops-file (file &rest body)
   (declare (debug t) (indent defun))
   `(with-temp-buffer
@@ -275,54 +263,70 @@ creation_rules:
 
 (sops-file-test sops-yaml-is-not-decrypted ()
   (with-sops-file-auto-mode
-    (with-age-encrypted-file "_" "_"
-      (find-file ".sops.yaml")
-      (let ((retrieved (buffer-string))
-            (on-disk (with-temp-buffer
-                       (insert-file-contents ".sops.yaml")
-                       (buffer-string))))
-        (should (equal retrieved on-disk))))))
+    (sops-file-test-setup-single-age-key)
+    (find-file ".sops.yaml")
+    (let ((retrieved (buffer-string))
+          (on-disk (with-temp-buffer
+                     (insert-file-contents ".sops.yaml")
+                     (buffer-string))))
+      (should (equal retrieved on-disk)))))
 
 (sops-file-test cannot-decrypt-shows-error-in-sops-file-errors ()
   (let ((relpath "cannot-decrypt.enc.yaml"))
     (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
+      (sops-file-test-setup-single-age-key)
+      (with-output-to-encrypted-sops-file relpath
+        (insert "a: c"))
+      (with-sops-identity-file
         (setenv "SOPS_AGE_KEY_FILE")
-        (find-file relpath)
-        (with-current-buffer "*sops-file-error*"
-          (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
-            (should (equal (buffer-substring (point-min) (1+ (length expected-failure))) expected-failure))))))))
+        (find-file relpath))))
+  (with-current-buffer "*sops-file-error*"
+    (let ((expected-failure "Failed to get the data key required to decrypt the SOPS file."))
+      (should (equal
+               (buffer-substring (point-min) (1+ (length expected-failure)))
+               expected-failure)))))
 
 (sops-file-test bad-passwd-shows-error-in-sops-file-errors ()
   (let ((relpath "bad-passwd.enc.yaml"))
     (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
+      (sops-file-test-setup-single-age-key)
+      (with-output-to-encrypted-sops-file relpath
+        (insert "a: b"))
+      (with-sops-identity-file
         (with-encrypted-identity
-          (with-passphrase-input "not-the-phrase"
-            (find-file relpath))
-          (with-current-buffer "*sops-file-error*"
-            (goto-char (point-min))
-            (should (re-search-forward "incorrect passphrase"))))))))
+          (with-passphrase-input "not-the-passphrase"
+            (find-file relpath))))))
+  (with-current-buffer "*sops-file-error*"
+    (goto-char (point-min))
+    (should (re-search-forward "incorrect passphrase"))))
 
 (sops-file-test major-mode-in-filename-is-respected-after-decryption ()
   (let ((relpath "my-secret-package.enc.el"))
+    (sops-file-test-setup-single-age-key)
+    (with-output-to-encrypted-sops-file relpath)
     (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath ""
+      (with-sops-identity-file
         (find-file relpath)
         (should (equal major-mode 'emacs-lisp-mode))))))
 
 (sops-file-test re-entering-does-not-redecode ()
   (let ((relpath "re-entering-no-decode.enc.yaml"))
+    (sops-file-test-setup-single-age-key)
+    (with-output-to-encrypted-sops-file relpath
+      (insert "key: value\n"))
     (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
+      (with-sops-identity-file
         (find-file relpath)
-        (format-find-file relpath 'sops-file)
-        (should (equal (buffer-string) "key: value\n"))))))
+        (format-find-file relpath 'sops-file)))
+    (should (equal (buffer-string) "key: value\n"))))
 
 (sops-file-test re-encode-allows-decode ()
   (let ((relpath "re-encode-allows-decode.enc.yaml"))
+    (sops-file-test-setup-single-age-key)
+    (with-output-to-encrypted-sops-file relpath
+      (insert "key: value"))
     (with-sops-file-auto-mode
-      (with-age-encrypted-file relpath "key: value\n"
+      (with-sops-identity-file
         (find-file-literally relpath)
         (format-decode-buffer 'sops-file)
         (should (equal (buffer-string) "key: value\n"))

@@ -72,6 +72,13 @@
   :group 'sops-file
   :type 'function)
 
+(defcustom sops-file-prompts
+  '("Enter passphrase for"
+    "Enter PIN for")
+  "Prompts possibly shown to the user for interactive input during decryption."
+  :group 'sops-file
+  :type '(repeat string))
+
 (defvar sops-file-auto-mode-regex
   "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
   "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice.")
@@ -156,8 +163,7 @@
               (with-current-buffer stdout
                 (if-let ((_
                           (cl-loop
-                           for prompt in '("Enter passphrase for"
-                                           "Enter PIN for")
+                           for prompt in sops-file-prompts
                            when (save-excursion
                                   (goto-char (point-min))
                                   (re-search-forward prompt nil t))

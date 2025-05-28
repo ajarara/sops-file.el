@@ -62,10 +62,8 @@ creation_rules:
       (mapcar #'cadr keys)
       "\n"))))
 
-;; in the future we should extend this to support multiple kinds of keys
-;; but for now, we'll stick with age: gpg needs strong isolation from the daemon
-;; ssh keys might be easier to test.
 (defun sops-file-test-setup-single-age-key ()
+  "Generate a single age key, write it to disk as an identity and in the creation_rules"
   (let ((keys (sops-file-test--generate-age-keys)))
     (sops-file-test--write-sops-yaml-for-keys keys)
     (sops-file-test--write-identity-for-keys keys)))
@@ -181,8 +179,9 @@ creation_rules:
                 (make-temp-file
                  (expand-file-name ,(symbol-name name) ,sops-file-test-root) t)))
            (unwind-protect
-               (progn ,@body)
-             (ignore-errors "*sops-file-error*"))
+               (with-temp-buffer ,@body)
+             (ignore-errors
+               (kill-buffer "*sops-file-error*")))
            (delete-directory default-directory t))))))
 
 (sops-file-test read-file ()
@@ -208,18 +207,20 @@ creation_rules:
 
 (sops-file-test updates-are-saved ()
   (let ((relpath "updates-saved"))
-    (sops-file-test-setup-single-age-key)
-    (with-output-to-encrypted-sops-file relpath
-      (insert "#!/usr/bin/env sh"))
     (with-sops-identity-file
-      (save-current-buffer
+      (with-temp-buffer
+        (sops-file-test-setup-single-age-key)
+        (with-output-to-encrypted-sops-file relpath
+          (insert "#!/usr/bin/env sh"))
+        (save-current-buffer
+          (format-find-file relpath 'sops-file)
+          (while (search-forward "sh" nil t)
+            (replace-match "awk" nil t))
+          (save-buffer)
+          (kill-buffer))
         (format-find-file relpath 'sops-file)
-        (while (search-forward "sh" nil t)
-          (replace-match "awk" nil t))
-        (save-buffer)
-        (kill-buffer))
-      (format-find-file relpath 'sops-file)
-      (should (equal major-mode 'awk-mode)))))
+        (should (equal (buffer-string) "#!/usr/bin/env awk\n"))
+        (should (equal major-mode 'awk-mode))))))
 
 (sops-file-test auto-mode-entry-point ()
   (let ((relpath "auto-mode-entry.enc.yaml"))
@@ -335,11 +336,18 @@ creation_rules:
         (format-decode-buffer 'sops-file)
         (should (equal (buffer-string) "key: value\n"))))))
 
-;; (ert-deftest sops-file-test--file-creation ()
-;;   (let ((relpath "non-existent-file.enc.yaml"))
-;;     (with-sops-file-directory "file-creation"
-;;       (with-sops-file-auto-mode
-;;         )
-;;       (format-find-file relpath 'sops-file))))
+;; (sops-file-test format-file-creation ()
+;;   (let ((relpath "non-existent.enc.yaml"))
+;;     (sops-file-test-setup-single-age-key)
+;;     (with-sops-identity-file
+;;       (format-find-file relpath 'sops-file)
+;;       (insert "key: value")
+;;       (save-buffer)
+;;       (save-current-buffer
+;;         (kill-buffer))
+      
+;;       (format-find-file relpath 'sops-file)
+;;       (should (equal (buffer-string) "key: value\n")))))
+
 
 (provide 'sops-file-test)

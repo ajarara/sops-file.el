@@ -366,4 +366,13 @@ other: should-be-cleartext # noencrypt")
         (should (not (re-search-forward "key: value" nil t)))
         (should (re-search-forward "other: should-be-cleartext"))))))
 
+(sops-file-test malformed-sops-yaml-does-not-hang ()
+  (let ((relpath "whatever.enc.yaml"))
+    (with-temp-file relpath
+      (insert "a: c"))
+    ;; crucially we do not generate any keys nor identity, and we have an empty .sops.yaml
+    (with-temp-file ".sops.yaml")
+    (format-find-file relpath 'sops-file)
+    (should (equal (buffer-string) "a: c"))))
+
 (provide 'sops-file-test)

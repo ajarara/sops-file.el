@@ -147,7 +147,9 @@
                :stderr stderr)))
         (set-process-sentinel (get-buffer-process stderr) #'ignore)
         (process-send-region sops from to)
-        (process-send-eof sops)
+        ;; for malformed sops files sops hangs
+        (cl-loop repeat 2
+                 do (process-send-eof sops))
         (accept-process-output sops 1)
         (with-current-buffer stdout
           (if-let ((_

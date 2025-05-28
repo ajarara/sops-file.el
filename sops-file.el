@@ -145,37 +145,42 @@
                :buffer stdout
                :sentinel #'ignore
                :stderr stderr)))
-        (set-process-sentinel (get-buffer-process stderr) #'ignore)
-        (process-send-region sops from to)
-        ;; for malformed sops files sops hangs
-        (cl-loop repeat 2
-                 do (process-send-eof sops))
-        (accept-process-output sops 1)
-        (with-current-buffer stdout
-          (if-let ((_
-                    (cl-loop
-                     for prompt in '("Enter passphrase for"
-                                     "Enter PIN for")
-                     when (save-excursion
-                            (goto-char (point-min))
-                            (re-search-forward prompt nil t))
-                     return t))
-                   (passwd (read-passwd (buffer-string))))
-              (process-send-string
-               sops
-               (format "%s\n" passwd))))
-        (cl-loop for i from 1 to 5
-                 do
-                 (if (not (equal (process-status sops) 'run))
-                     (cl-return)
-                   (accept-process-output sops 1))
-                 finally (error "Sops is not decrypting, bailing. This is likely a bug in sops-file."))
-        (if (equal (process-exit-status sops) 0)
+        (unwind-protect
             (progn
-              (erase-buffer)
-              (insert-buffer-substring stderr))
-          (save-excursion
-            (funcall sops-file-error-renderer stderr)))
+              (set-process-sentinel (get-buffer-process stderr) #'ignore)
+              (process-send-region sops from to)
+              ;; for malformed sops files sops hangs
+              (cl-loop repeat 2
+                       do (process-send-eof sops))
+              (accept-process-output sops 1)
+              (with-current-buffer stdout
+                (if-let ((_
+                          (cl-loop
+                           for prompt in '("Enter passphrase for"
+                                           "Enter PIN for")
+                           when (save-excursion
+                                  (goto-char (point-min))
+                                  (re-search-forward prompt nil t))
+                           return t))
+                         (passwd (read-passwd (buffer-string))))
+                    (process-send-string
+                     sops
+                     (format "%s\n" passwd))))
+              (cl-loop for i from 1 to 5
+                       do
+                       (if (not (equal (process-status sops) 'run))
+                           (cl-return)
+                         (accept-process-output sops 1))
+                       finally (error "Sops is not decrypting, bailing. This is likely a bug in sops-file."))
+              (if (equal (process-exit-status sops) 0)
+                  (progn
+                    (erase-buffer)
+                    (insert-buffer-substring stderr))
+                (save-excursion
+                  (funcall sops-file-error-renderer stderr))))
+          (progn
+            (kill-buffer stdout)
+            (kill-buffer stderr)))
         (funcall sops-file-mode-inferrer))))
   (point-max))
 
@@ -184,7 +189,8 @@
   ;; has proven pretty unreliable, this works reliably
   (let* ((output-buffer (current-buffer))
          ;; save-current-buffer mucks with default-directory in tests,
-         ;; so peek it off the original buffer
+         ;; and presumably callers can use it so peek default-directory
+         ;; off the original buffer
          (default-directory (with-current-buffer orig-buf default-directory))
          (transformed
           (with-temp-buffer

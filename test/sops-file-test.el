@@ -21,8 +21,8 @@
 
 ;;; Commentary:
 
-;; Run with `make test`, these tests won't run reliably if at all in
-;; a host emacs
+;; Run with `make test`, these tests sometimes run reliably in a host emacs
+;; but don't count on it
 
 (require 'cl-lib)
 (require 'ert)
@@ -179,7 +179,8 @@ creation_rules:
                 (make-temp-file
                  (expand-file-name ,(symbol-name name) ,sops-file-test-root) t)))
            (unwind-protect
-               (with-temp-buffer ,@body)
+               (with-temp-buffer
+                 (save-current-buffer ,@body))
              (ignore-errors
                (kill-buffer "*sops-file-error*")))
            (delete-directory default-directory t))))))
@@ -208,19 +209,18 @@ creation_rules:
 (sops-file-test updates-are-saved ()
   (let ((relpath "updates-saved"))
     (with-sops-identity-file
-      (with-temp-buffer
-        (sops-file-test-setup-single-age-key)
-        (with-output-to-encrypted-sops-file relpath
-          (insert "#!/usr/bin/env sh"))
-        (save-current-buffer
-          (format-find-file relpath 'sops-file)
-          (while (search-forward "sh" nil t)
-            (replace-match "awk" nil t))
-          (save-buffer)
-          (kill-buffer))
+      (sops-file-test-setup-single-age-key)
+      (with-output-to-encrypted-sops-file relpath
+        (insert "#!/usr/bin/env sh"))
+      (save-current-buffer
         (format-find-file relpath 'sops-file)
-        (should (equal (buffer-string) "#!/usr/bin/env awk\n"))
-        (should (equal major-mode 'awk-mode))))))
+        (while (search-forward "sh" nil t)
+          (replace-match "awk" nil t))
+        (save-buffer)
+        (kill-buffer))
+      (format-find-file relpath 'sops-file)
+      (should (equal (buffer-string) "#!/usr/bin/env awk\n"))
+      (should (equal major-mode 'awk-mode)))))
 
 (sops-file-test auto-mode-entry-point ()
   (let ((relpath "auto-mode-entry.enc.yaml"))
@@ -336,18 +336,15 @@ creation_rules:
         (format-decode-buffer 'sops-file)
         (should (equal (buffer-string) "key: value\n"))))))
 
-;; (sops-file-test format-file-creation ()
-;;   (let ((relpath "non-existent.enc.yaml"))
-;;     (sops-file-test-setup-single-age-key)
-;;     (with-sops-identity-file
-;;       (format-find-file relpath 'sops-file)
-;;       (insert "key: value")
-;;       (save-buffer)
-;;       (save-current-buffer
-;;         (kill-buffer))
-      
-;;       (format-find-file relpath 'sops-file)
-;;       (should (equal (buffer-string) "key: value\n")))))
+(sops-file-test format-file-creation ()
+  (let ((relpath "non-existent.enc.yaml"))
+    (sops-file-test-setup-single-age-key)
+    (with-sops-identity-file
+      (format-find-file relpath 'sops-file)
+      (insert "key: value")
+      (save-buffer)
+      (format-find-file relpath 'sops-file)))
+      (should (equal (buffer-string) "key: value\n")))
 
 
 (provide 'sops-file-test)

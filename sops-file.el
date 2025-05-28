@@ -177,6 +177,7 @@
   ;; manipulating the output buffer directly
   ;; has proven pretty unreliable, this works reliably
   (let* ((output-buffer (current-buffer))
+         (default-directory (with-current-buffer orig-buf default-directory))
          (transformed
           (with-temp-buffer
             (insert-buffer-substring orig-buf)

@@ -166,7 +166,7 @@
             (progn
               (set-process-sentinel (get-buffer-process stderr) #'ignore)
               (process-send-region sops from to)
-              ;; for malformed sops files sops hangs
+              ;; for empty .sops.yaml files sops hangs
               (cl-loop repeat 2
                        do (process-send-eof sops))
               (accept-process-output sops 1)

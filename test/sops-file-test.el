@@ -105,18 +105,6 @@ creation_rules:
                                "--filename-override"
                                ,file)))))
 
-(defmacro with-disabled-gpg-agent (&rest body)
-  (declare (debug t) (indent defun))
-  (let ((disabled-gpg-agent-info-sym (gensym)))
-    `(let ((,disabled-gpg-agent-info-sym (getenv "GPG_AGENT_INFO")))
-       (unwind-protect
-           (progn
-             ;; we deliberately set to the empty string to trigger a parse
-             ;; error in the gopgagent library sops uses
-             (setenv "GPG_AGENT_INFO" "")
-             ,@body)
-         (setenv "GPG_AGENT_INFO" ,disabled-gpg-agent-info-sym)))))
-
 (defvar sops-file-test-passphrase-key "passphrase")
 
 (defun sops-file-test-age-encrypt-identity-file ()
@@ -135,7 +123,7 @@ creation_rules:
   (declare (debug t) (indent defun))
   `(progn
      (sops-file-test-age-encrypt-identity-file)
-     (with-disabled-gpg-agent
+     (let ((sops-file-disable-pinentry t))
        ,@body)))
 
 (defmacro with-passphrase-input (passphrase &rest body)

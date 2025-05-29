@@ -84,6 +84,11 @@
   "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
   "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice.")
 
+(defcustom sops-file-disable-pinentry nil
+  "Have sops prompt for pin directly instead of delegating to pinentry. Counterintuitively, you should set this especially if you use pinentry-tty instead of graphical pinentry, since sops falls back to reading stdin with a prompt instead of delegating to pinentry-tty which immediately fails in a subprocess."
+  :group 'sops-file
+  :type 'boolean)
+
 (defvar-local sops-file--is-visiting nil)
 (put 'sops-file--is-visiting 'permanent-local t)
 
@@ -144,7 +149,11 @@
              (sops
               (make-process
                :name "sops"
-               :command `("sops"
+               :command `(,@(and sops-file-disable-pinentry
+                                 ;; we deliberately set to the empty string to trigger a parse
+                                 ;; error in the gopgagent library sops uses
+                                 '("env" "GPG_AGENT_INFO=''"))
+                          "sops"
                           ,@sops-file-decrypt-args
                           "--filename-override"
                           ,buffer-file-name

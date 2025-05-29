@@ -11,6 +11,7 @@ Using straight.el:
 (use-package sops-file
   :straight
   `(:host github :repo "ajarara/sops-file.el")
+  :after yaml-mode  ;; yaml-mode is optional
   :config
   ;; adds an auto-mode-alist entry and yaml-mode hooks if yaml-mode is installed
   (sops-file-auto-mode 1))
@@ -33,7 +34,7 @@ Users shouldn't need to integrate with sops-file through writing code: for now i
 - `sops-file-entry-hook`
 
 # roadmap
-I'm not sure when to define stability, I'd prefer to let this soak with some users before claiming stability. However there are some features I know need to be implemented to be a comprehensive experience. 
+Before claiming a stable 1.0, we're going to wait for users and bug reports to come in. There are a couple features I know that need to be implemented for a comprehensive experience: 
 - Keygroup handling: sops can ask multiple times for passphrases for a single decryption pass
 - GPG support: testing interactively, this works only with graphical pinentry: dropping into a tty and attempting to decrypt causes a "Operation cancelled error". In theory it should be as simple as figuring out what sops prints as the prompt for the pin/passphrase and adding it to the prompts in `sops-file-decode`.
 

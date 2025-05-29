@@ -1,9 +1,11 @@
 # sops-file.el
-A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey). It will work out of the box for anything using graphical pinentry, and as long as sops prompts for other passphrases, sops-file will forward through emacs directly.
+A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey).
 
 # requirements
 - sops minimum version 3.10.2 (latest as of 5/20/25)
   - needed for https://github.com/getsops/sops/pull/1400
+- env (for disabling pinentry)
+- minimum emacs version unknown
 
 # installation
 Using straight.el:
@@ -26,17 +28,21 @@ Without any configuration, users can simply do `M-x format-find-file`, select th
 
 Users are welcome to attach `sops-file-entry-hook` to any major mode they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to `*sops-file-error*`.
 
-Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on a new file: provided there is a creation_rule for the path it will never hit disk decrypted.
+Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on any path. Provided there is a creation_rule for that path, the contents will never hit disk decrypted.
 
 # api
-Users shouldn't need to integrate with sops-file through writing code: for now it exposes no hooks and integrates with emacs directly. It might be useful to think of this package as:
-- the sops-file format registration
+Users shouldn't need to integrate with sops-file through writing code: for now it exposes no hooks and integrates with emacs directly. The public API should be thought of as:
+- the sops-file format registration (which happens on load)
+- `sops-file-auto-mode`
 - `sops-file-entry-hook`
+- defcustoms/defvars
 
 # roadmap
-Before claiming a stable 1.0, we're going to wait for users and bug reports to come in. There are a couple features I know that need to be implemented for a comprehensive experience: 
+Before claiming a stable 1.0, we're going to wait for more users beyond me. There are a couple features I know that need to be implemented for a comprehensive experience: 
 - Keygroup handling: sops can ask multiple times for passphrases for a single decryption pass
-- GPG support: testing interactively, this works only with graphical pinentry: dropping into a tty and attempting to decrypt causes a "Operation cancelled error". In theory it should be as simple as figuring out what sops prints as the prompt for the pin/passphrase and adding it to the prompts in `sops-file-decode`.
+  - if you use age exclusively, setup is convoluted and might not even work: sops supports only one identity file, and that identity file cannot be encrypted with multiple passphrases. So maybe an armored SOPS_AGE_KEY environment variable?
+- confirmed, tested pgp support: 
+  - looking at source pgp follows the same logic as age: lean on gpg-agent to request the passphrase (age uses gpg-agent as well, if available). If no connection can be made, read it directly from stdin. Gpg has many more moving parts over age, so an isolated test is going to be more complex. But in theory it should work fine, with graphical pinentry or with no daemon (non-graphical pinentry will not work).
 
 ## inspirations
 epa-file, [sops.el](https://github.com/djgoku/sops), rot13

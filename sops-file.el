@@ -74,7 +74,8 @@
 
 (defcustom sops-file-prompts
   '("Enter passphrase for"
-    "Enter PIN for")
+    "Enter PIN for"
+    "Enter PGP key")
   "Prompts possibly shown to the user for interactive input during decryption."
   :group 'sops-file
   :type '(repeat string))

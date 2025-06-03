@@ -80,9 +80,10 @@
   :group 'sops-file
   :type '(repeat string))
 
-(defvar sops-file-auto-mode-regex
-  "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
-  "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice.")
+(defcustom sops-file-auto-mode-regex "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
+  "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice."
+  :group 'sops-file
+  :type 'regexp)
 
 (defcustom sops-file-disable-pinentry nil
   "Have sops prompt for pin directly instead of delegating to pinentry. Counterintuitively, you should set this especially if you use pinentry-tty instead of graphical pinentry, since sops falls back to reading stdin with a prompt instead of delegating to pinentry-tty which immediately fails in a subprocess."

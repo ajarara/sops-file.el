@@ -26,7 +26,7 @@ Without any configuration, users can simply do `M-x format-find-file`, select th
 
 `sops-file-auto-mode` is a global minor mode that attaches a hook to yaml-mode and installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not). If creation rules are lax, then sops-file will consider any yaml file as a sops file and will apply the format!
 
-Users are welcome to attach `sops-file-entry-hook` to any major mode they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to `*sops-file-error*`.
+Users are welcome to attach `sops-file-entry-trigger` to any major mode hook they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to `*sops-file-error*`.
 
 Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on any path. Provided there is a creation_rule for that path, the contents will never hit disk decrypted.
 
@@ -34,7 +34,7 @@ Users can also use this to create sops files for the first time, simply do `M-x 
 Users shouldn't need to integrate with sops-file through writing code: for now it exposes no hooks and integrates with emacs directly. The public API should be thought of as:
 - the sops-file format registration (which happens on load)
 - `sops-file-auto-mode`
-- `sops-file-entry-hook`
+- `sops-file-entry-trigger` (not a hook itself)
 - defcustoms defined in the sops-file group
 
 # Roadmap

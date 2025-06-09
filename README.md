@@ -54,5 +54,8 @@ There are two major points against this:
 - I bet most users toggle on the mode in their init file and don't toggle it interactively (if they do, they probably want to have it be disabled on one specific file in which case they should use find-file-literally).
 - Applying the format to buffers not visible is a subpar experience when passphrases are prompted interactively: multiple passphrases, multiple files, we'd need to flit them in or something.
 
+### sops exec-env password prompt
+Simple, add the prompts to comint-password-prompt-regexp for similar behavior to allow for read-password during shell command invocations. This is eventually used by comint-output-filter-functions
+
 ## inspirations
 epa-file, [sops.el](https://github.com/djgoku/sops), rot13

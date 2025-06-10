@@ -167,11 +167,12 @@
             (progn
               (set-process-sentinel (get-buffer-process stderr) #'ignore)
               (process-send-region sops from to)
-              ;; for empty .sops.yaml files sops hangs
+              ;; for empty .sops.yaml files sops hangs if we don't send two EOFs
               (cl-loop repeat 2
                        do (process-send-eof sops))
               (accept-process-output sops 1)
               (with-current-buffer stdout
+                ;; TODO handle "Please insert YubiKey with serial "
                 (if-let ((_
                           (cl-loop
                            for prompt in sops-file-prompts

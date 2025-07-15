@@ -216,13 +216,13 @@
             (if (equal (process-exit-status sops) 0)
                 (progn
                   (erase-buffer)
-                  (insert-buffer-substring stderr))
+                  (insert-buffer-substring stderr)
+                  (funcall sops-file-mode-inferrer))
               (save-excursion
                 (funcall sops-file-error-renderer stderr))))
         (progn
           (kill-buffer stdout)
-          (kill-buffer stderr)))
-      (funcall sops-file-mode-inferrer)))
+          (kill-buffer stderr)))))
   (point-max))
 
 (defun sops-file-encode (from to orig-buf)

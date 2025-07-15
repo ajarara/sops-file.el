@@ -44,6 +44,8 @@ Before claiming a stable 1.0, we're going to wait for more users beyond me. Ther
 - confirmed, tested pgp support: 
   - looking at source pgp follows the same logic as age: lean on gpg-agent to request the passphrase (age uses gpg-agent as well, if available). If no connection can be made, read it directly from stdin. Gpg has many more moving parts over age, so an isolated test is going to be more complex. But in theory it should work fine, with graphical pinentry or with no daemon (non-graphical pinentry will not work).
 - tramp support: as of now, none known. I remember there are some caveats towards remote shell commands and having to mix in stderr/stdout, which would be really annoying here.
+- confirmed support for external KMS providers
+
 
 ## dubious directions
 What follows are things that I think would be useful, but would probably mean compromises to the complexity of the code as is or would be difficult to test. Your comments are welcome on these (or anything else related to this project for that matter), as issues.
@@ -55,7 +57,7 @@ There are two major points against this:
 - Applying the format to buffers not visible is a subpar experience when passphrases are prompted interactively: multiple passphrases, multiple files, we'd need to flit them in or something.
 
 ### sops exec-env password prompt
-Simple, add the prompts to comint-password-prompt-regexp for similar behavior to allow for read-password during shell command invocations. This is eventually used by comint-output-filter-functions
+Simple, add the prompts to comint-password-prompt-regexp for similar behavior to allow for read-password during shell command invocations. This is eventually used by comint-output-filter-functions. This can probably be added unconditionally.
 
 ## inspirations
 epa-file, [sops.el](https://github.com/djgoku/sops), rot13

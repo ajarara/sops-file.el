@@ -65,12 +65,19 @@
 
 (defcustom sops-file-error-renderer
   (lambda (stderr-buf)
-    (with-current-buffer (get-buffer-create "*sops-file-error*")
-      (let ((buffer-read-only nil))
-        (erase-buffer)
-        (insert-buffer-substring stderr-buf))
-      (special-mode)
-      (message "Could not decrypt visited file, see *sops-file-error* for sops output")))
+    (let* ((stdout-buf (current-buffer))
+           (sops-process (get-buffer-process stdout-buf))
+           (process-hanging (process-live-p sops-process)))
+      (with-current-buffer (get-buffer-create "*sops-file-error*")
+        (let ((buffer-read-only nil))
+          (erase-buffer)
+          (when process-hanging
+            (insert "sops-file.el: Process timed out with possibly unhandled prompts, stdout output follows\n")
+            (insert-buffer-substring stdout-buf)
+            (insert "\nsops-file.el: stderr output follows\n"))
+          (insert-buffer-substring stderr-buf)))
+        (special-mode)
+        (message "Could not decrypt visited file, see *sops-file-error* for sops output")))
   "Report sops error (likely decryption) to the user."
   :group 'sops-file
   :type 'function)

@@ -202,20 +202,23 @@
         (progn
           (set-process-sentinel (get-buffer-process stderr) #'ignore)
           (process-send-region sops from to)
-          ;; for empty .sops.yaml files sops hangs if we don't send two EOFs
+          ;; for empty .sops.yaml files, sops hangs if we don't send two EOFs
           (cl-loop repeat 2
                    do (process-send-eof sops))
           (with-current-buffer stdout
             (cl-loop repeat 3 
              while (process-live-p sops)
              do (accept-process-output sops 1)))
-          (if (equal (process-exit-status sops) 0)
+          (if (and
+               (equal (process-exit-status sops) 0)
+               (not (process-live-p sops)))
               (progn
                 (erase-buffer)
                 (insert-buffer-substring stderr)
                 (funcall sops-file-mode-inferrer))
             (save-excursion
-              (funcall sops-file-error-renderer stderr))))
+              (with-current-buffer stdout
+                (funcall sops-file-error-renderer stderr)))))
       (progn
         (kill-buffer stdout)
         (kill-buffer stderr))))

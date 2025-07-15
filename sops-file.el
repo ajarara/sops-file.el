@@ -31,7 +31,10 @@
 ;;; Code:
 (require 'cl-lib)
 
-(defgroup sops-file nil "Transparently manipulate SOPS files" :prefix 'sops-file :group 'convenience)
+(defgroup sops-file nil
+  "Transparently manipulate SOPS files"
+  :prefix 'sops-file
+  :group 'convenience)
 
 (defcustom sops-file-executable
   "sops"

@@ -75,9 +75,9 @@
             (insert "sops-file.el: Process is hanging with possibly unhandled prompts, stdout output follows\n")
             (insert-buffer-substring stdout-buf)
             (insert "\nsops-file.el: stderr output follows\n"))
-          (insert-buffer-substring stderr-buf)))
-        (special-mode)
-        (message "Could not decrypt visited file, see *sops-file-error* for sops output")))
+          (insert-buffer-substring stderr-buf))
+        (special-mode))
+      (error "Could not decrypt visited file, see *sops-file-error* for sops output")))
   "Report sops error (likely decryption) to the user."
   :group 'sops-file
   :type 'function)
@@ -100,26 +100,25 @@
 ;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L182
 (defun sops-file--prompt-handler-yubikey-pin ()
   (if-let* ((prev-point (point))
-            (curr-point (re-search-forward "Enter pin for.$" nil t))
+            (curr-point (re-search-forward "Enter pin for.*" nil t))
             (prompt (buffer-substring prev-point curr-point))
-            (sops (buffer-process (current-buffer)))
+            (sops (get-buffer-process (current-buffer)))
             (passwd (read-passwd prompt))
-            (response (format "%s\n" passwd)))
-      (process-send-string sops response)
-    t))
+            (response (format "%s
+" passwd)))
+      (not (process-send-string sops response))))
 
 ;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L171
 (defun sops-file--prompt-handler-yubikey-insert ()
   (if-let* ((prev-point (point))
-            (curr-point (re-search-forward "Please insert.$" nil t))
+            (curr-point (re-search-forward "Please insert.*" nil t))
             (prompt (buffer-substring prev-point curr-point))
-            (sops (buffer-process (current-buffer)))
+            (sops (get-buffer-process (current-buffer)))
             (response
              (or
               (and sops-file-skip-unavailable-smartcards "2")
               (string (read-char-exclusive prompt (list "1" "2"))))))
-      (process-send-string sops response)
-    t))
+      (not (process-send-string sops response))))
 
 (defcustom sops-file-prompt-handler-functions
   `(sops-file--prompt-handler-yubikey-pin
@@ -236,7 +235,9 @@
               (with-current-buffer stdout
                 (funcall sops-file-decryption-error-renderer stderr)))))
       (progn
-        (kill-process sops)
+        ;; in normal scenarios it's already dead, in unhandled prompt scenarios it won't be
+        ;; (ignore-errors
+        ;;   (kill-process sops))
         (kill-buffer stdout)
         (kill-buffer stderr))))
   (point-max))

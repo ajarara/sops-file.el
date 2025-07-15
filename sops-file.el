@@ -37,22 +37,22 @@
   :group 'convenience)
 
 (defcustom sops-file-executable
-  "sops"
-  "Path to the sops executable."
+  (cl-constantly "sops")
+  "The sops executable we use to encrypt and decrypt. Called in the buffer we are formatting."
   :group 'sops-file
-  :type 'string)
+  :type 'function)
 
 (defcustom sops-file-decrypt-args
-  `("decrypt")
-  "Decrypt arguments for sops."
+  (cl-constantly '("decrypt"))
+  "Decrypt arguments for sops. Called in the buffer we are formatting, where the text is still encrypted."
   :group 'sops-file
-  :type '(repeat string))
+  :type 'function)
 
 (defcustom sops-file-encrypt-args
-  `("encrypt")
-  "Encrypt arguments for sops."
+  (cl-constantly '("encrypt"))
+  "Encrypt arguments for sops. Called in the buffer we are formatting, where the text is decrypted."
   :group 'sops-file
-  :type '(repeat string))
+  :type 'function)
 
 (defcustom sops-file-mode-inferrer
   (lambda ()
@@ -75,16 +75,8 @@
   :group 'sops-file
   :type 'function)
 
-(defcustom sops-file-prompts
-  '("Enter passphrase for"
-    "Enter PIN for"
-    "Enter PGP key")
-  "Prompts possibly shown to the user for interactive input during decryption."
-  :group 'sops-file
-  :type '(repeat string))
-
 (defcustom sops-file-auto-mode-regex "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
-  "Files that we attempt to automatically decrypt. If yaml-mode is available depending on load ordering this might be shadowed by yaml-mode's entry, in which case the hook should suffice."
+  "Files that we attempt to automatically decrypt. If yaml-mode is available, depending on load ordering, this might be shadowed by yaml-mode's entry, in which case the hook should suffice."
   :group 'sops-file
   :type 'regexp)
 
@@ -129,8 +121,13 @@
   :group 'sops-file
   :type 'hook)
 
-(defvar-local sops-file--is-visiting nil)
-(put 'sops-file--is-visiting 'permanent-local t)
+(defcustom sops-file-name-inferrer
+  (lambda ()
+    (or buffer-file-name
+        buffer-name))
+  "Infer file name based off the current buffer."
+  :group 'sops-file
+  :type 'function)
 
 (defun sops-file-enable ()
   (unless (memq 'sops-file buffer-file-format)
@@ -191,7 +188,9 @@
                              ;; error in the gopgagent library sops uses
                              '("env" "GPG_AGENT_INFO=''"))
                       "sops"
-                      ,@sops-file-decrypt-args
+                      ,@(funcall sops-file-decrypt-args)
+                      "--filename-override"
+                      ,(funcall sops-file-name-inferrer)
                       "--output"
                       "/dev/stderr")
            :filter (lambda (_ _)
@@ -202,7 +201,6 @@
     (unwind-protect
         (progn
           (set-process-sentinel (get-buffer-process stderr) #'ignore)
-          
           (process-send-region sops from to)
           ;; for empty .sops.yaml files sops hangs if we don't send two EOFs
           (cl-loop repeat 2
@@ -241,9 +239,9 @@
                    t
                    t
                    nil
-                   `(,@sops-file-encrypt-args
+                   `(,@(funcall sops-file-encrypt-args)
                      "--filename-override"
-                     ,(buffer-file-name orig-buf)))
+                     ,(with-current-buffer orig-buf (funcall sops-file-name-inferrer))))
             (buffer-string))))
     (erase-buffer)
     (insert transformed)

@@ -93,6 +93,42 @@
   :group 'sops-file
   :type 'boolean)
 
+(defcustom sops-file-skip-unavailable-smartcards t
+  "If prompted to insert a smartcard, skip it instead of prompting the user."
+  :group 'sops-file
+  :type 'boolean)
+
+;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L182
+(defun sops-file--prompt-handler-yubikey-pin ()
+  (if-let* ((prev-point (point))
+            (curr-point (re-search-forward "Enter pin for.$" nil t))
+            (prompt (buffer-substring prev-point curr-point))
+            (sops (buffer-process (current-buffer)))
+            (passwd (read-passwd prompt))
+            (response (format "%s\n" passwd)))
+      (process-send-string sops response)
+    t))
+
+;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L171
+(defun sops-file--prompt-handler-yubikey-insert ()
+  (if-let* ((prev-point (point))
+            (curr-point (re-search-forward "Please insert.$" nil t))
+            (prompt (buffer-substring prev-point curr-point))
+            (sops (buffer-process (current-buffer)))
+            (response
+             (or
+              (and sops-file-skip-unavailable-smartcards "2")
+              (string (read-char-exclusive prompt (list "1" "2"))))))
+      (process-send-string sops response)
+    t))
+
+(defcustom sops-file-prompt-handler-functions
+  `(sops-file--prompt-handler-yubikey-pin
+    sops-file--prompt-handler-yubikey-insert)
+  "Sops may repeatedly prompt for additional information during the decryption pass. Users should manipulate this list of functions to handle prompts for their specific scenario. For any successful prompt handling, simply place the point past the full text of the prompt and return t (for run-hook-with-args-until-success to stop)."
+  :group 'sops-file
+  :type 'hook)
+
 (defvar-local sops-file--is-visiting nil)
 (put 'sops-file--is-visiting 'permanent-local t)
 
@@ -144,61 +180,49 @@
 
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
-    (error "Cannot handle partial decoding"))
+    (error "Cannot handle partial decoding of buffer"))
   (unless sops-file--is-visiting
     (setq sops-file--is-visiting t)
-    (when (file-exists-p buffer-file-name)
-      (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
-             (stderr (generate-new-buffer " *sops-file-stderr*" t))
-             (sops
-              (make-process
-               :name "sops"
-               :command `(,@(and sops-file-disable-pinentry
-                                 ;; we deliberately set to the empty string to trigger a parse
-                                 ;; error in the gopgagent library sops uses
-                                 '("env" "GPG_AGENT_INFO=''"))
-                          "sops"
-                          ,@sops-file-decrypt-args
-                          "--filename-override"
-                          ,buffer-file-name
-                          "--output"
-                          "/dev/stderr")
-               :buffer stdout
-               :sentinel #'ignore
-               :stderr stderr)))
-        (unwind-protect
-            (progn
-              (set-process-sentinel (get-buffer-process stderr) #'ignore)
-              (process-send-region sops from to)
-              ;; for empty .sops.yaml files sops hangs if we don't send two EOFs
-              (cl-loop repeat 2
-                       do (process-send-eof sops))
-              (accept-process-output sops 1)
-              (with-current-buffer stdout
-                ;; TODO handle "Please insert YubiKey with serial "
-                (if-let ((_
-                          (cl-loop
-                           for prompt in sops-file-prompts
-                           when (save-excursion
-                                  (goto-char (point-min))
-                                  (re-search-forward prompt nil t))
-                           return t))
-                         (passwd (read-passwd (buffer-string))))
-                    (process-send-string
-                     sops
-                     (format "%s\n" passwd))))
-              (while (equal (process-status sops) 'run)
-                (accept-process-output sops 1))
-              (if (equal (process-exit-status sops) 0)
-                  (progn
-                    (erase-buffer)
-                    (insert-buffer-substring stderr))
-                (save-excursion
-                  (funcall sops-file-error-renderer stderr))))
+    (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
+           (stderr (generate-new-buffer " *sops-file-stderr*" t))
+           (sops
+            (make-process
+             :name "sops"
+             :command `(,@(and sops-file-disable-pinentry
+                               ;; we deliberately set to the empty string to trigger a parse
+                               ;; error in the gopgagent library sops uses
+                               '("env" "GPG_AGENT_INFO=''"))
+                        "sops"
+                        ,@sops-file-decrypt-args
+                        "--output"
+                        "/dev/stderr")
+             :filter (lambda _
+                       (run-hook-with-args-until-success sops-file-prompt-handler-functions))
+             :buffer stdout
+             :sentinel #'ignore
+             :stderr stderr)))
+      (unwind-protect
           (progn
-            (kill-buffer stdout)
-            (kill-buffer stderr)))
-        (funcall sops-file-mode-inferrer))))
+            (set-process-sentinel (get-buffer-process stderr) #'ignore)
+            
+            (process-send-region sops from to)
+            ;; for empty .sops.yaml files sops hangs if we don't send two EOFs
+            (cl-loop repeat 2
+                     do (process-send-eof sops))
+            (with-current-buffer stdout
+              (cl-loop ;; repeat 3 
+                       while (process-live-p your-process)
+                       do (accept-process-output your-process 1)))
+            (if (equal (process-exit-status sops) 0)
+                (progn
+                  (erase-buffer)
+                  (insert-buffer-substring stderr))
+              (save-excursion
+                (funcall sops-file-error-renderer stderr))))
+        (progn
+          (kill-buffer stdout)
+          (kill-buffer stderr)))
+      (funcall sops-file-mode-inferrer)))
   (point-max))
 
 (defun sops-file-encode (from to orig-buf)

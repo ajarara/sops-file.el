@@ -133,7 +133,7 @@
 (put 'sops-file--is-visiting 'permanent-local t)
 
 (defun sops-file-enable ()
-  (unless sops-file--is-visiting
+  (unless (memq 'sops-file buffer-file-format)
     (format-decode-buffer 'sops-file)))
 
 (defun sops-file-entry-trigger ()
@@ -181,48 +181,46 @@
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding of buffer"))
-  (unless sops-file--is-visiting
-    (setq sops-file--is-visiting t)
-    (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
-           (stderr (generate-new-buffer " *sops-file-stderr*" t))
-           (sops
-            (make-process
-             :name "sops"
-             :command `(,@(and sops-file-disable-pinentry
-                               ;; we deliberately set to the empty string to trigger a parse
-                               ;; error in the gopgagent library sops uses
-                               '("env" "GPG_AGENT_INFO=''"))
-                        "sops"
-                        ,@sops-file-decrypt-args
-                        "--output"
-                        "/dev/stderr")
-             :filter (lambda (_ _)
-                       (run-hook-with-args-until-success sops-file-prompt-handler-functions))
-             :buffer stdout
-             :sentinel #'ignore
-             :stderr stderr)))
-      (unwind-protect
-          (progn
-            (set-process-sentinel (get-buffer-process stderr) #'ignore)
-            
-            (process-send-region sops from to)
-            ;; for empty .sops.yaml files sops hangs if we don't send two EOFs
-            (cl-loop repeat 2
-                     do (process-send-eof sops))
-            (with-current-buffer stdout
-              (cl-loop ;; repeat 3 
-                       while (process-live-p sops)
-                       do (accept-process-output sops 1)))
-            (if (equal (process-exit-status sops) 0)
-                (progn
-                  (erase-buffer)
-                  (insert-buffer-substring stderr)
-                  (funcall sops-file-mode-inferrer))
-              (save-excursion
-                (funcall sops-file-error-renderer stderr))))
+  (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
+         (stderr (generate-new-buffer " *sops-file-stderr*" t))
+         (sops
+          (make-process
+           :name "sops"
+           :command `(,@(and sops-file-disable-pinentry
+                             ;; we deliberately set to the empty string to trigger a parse
+                             ;; error in the gopgagent library sops uses
+                             '("env" "GPG_AGENT_INFO=''"))
+                      "sops"
+                      ,@sops-file-decrypt-args
+                      "--output"
+                      "/dev/stderr")
+           :filter (lambda (_ _)
+                     (run-hook-with-args-until-success sops-file-prompt-handler-functions))
+           :buffer stdout
+           :sentinel #'ignore
+           :stderr stderr)))
+    (unwind-protect
         (progn
-          (kill-buffer stdout)
-          (kill-buffer stderr)))))
+          (set-process-sentinel (get-buffer-process stderr) #'ignore)
+          
+          (process-send-region sops from to)
+          ;; for empty .sops.yaml files sops hangs if we don't send two EOFs
+          (cl-loop repeat 2
+                   do (process-send-eof sops))
+          (with-current-buffer stdout
+            (cl-loop ;; repeat 3 
+             while (process-live-p sops)
+             do (accept-process-output sops 1)))
+          (if (equal (process-exit-status sops) 0)
+              (progn
+                (erase-buffer)
+                (insert-buffer-substring stderr)
+                (funcall sops-file-mode-inferrer))
+            (save-excursion
+              (funcall sops-file-error-renderer stderr))))
+      (progn
+        (kill-buffer stdout)
+        (kill-buffer stderr))))
   (point-max))
 
 (defun sops-file-encode (from to orig-buf)
@@ -249,7 +247,6 @@
             (buffer-string))))
     (erase-buffer)
     (insert transformed)
-    (setq sops-file--is-visiting nil)
     (point-max)))
 
 (provide 'sops-file)

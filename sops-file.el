@@ -196,7 +196,7 @@
                         ,@sops-file-decrypt-args
                         "--output"
                         "/dev/stderr")
-             :filter (lambda _
+             :filter (lambda (_ _)
                        (run-hook-with-args-until-success sops-file-prompt-handler-functions))
              :buffer stdout
              :sentinel #'ignore
@@ -211,8 +211,8 @@
                      do (process-send-eof sops))
             (with-current-buffer stdout
               (cl-loop ;; repeat 3 
-                       while (process-live-p your-process)
-                       do (accept-process-output your-process 1)))
+                       while (process-live-p sops)
+                       do (accept-process-output sops 1)))
             (if (equal (process-exit-status sops) 0)
                 (progn
                   (erase-buffer)

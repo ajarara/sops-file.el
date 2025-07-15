@@ -236,6 +236,7 @@
               (with-current-buffer stdout
                 (funcall sops-file-decryption-error-renderer stderr)))))
       (progn
+        (kill-process sops)
         (kill-buffer stdout)
         (kill-buffer stderr))))
   (point-max))

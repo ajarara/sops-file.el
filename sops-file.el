@@ -139,7 +139,7 @@
             (_
              (with-temp-buffer
                (save-excursion
-                 (call-process sops-file-executable nil (current-buffer) nil "filestatus" path))
+                 (call-process (funcall sops-file-executable) nil (current-buffer) nil "filestatus" path))
                ;; if not managed we get :json-false instead of nil, which is truthy
                (eq t (alist-get 'encrypted (json-read-object))))))
       ;; file is managed by sops, attempt to decrypt it
@@ -194,7 +194,7 @@
                       "--output"
                       "/dev/stderr")
            :filter (lambda (_ _)
-                     (run-hook-with-args-until-success sops-file-prompt-handler-functions))
+                     (run-hook-with-args-until-success 'sops-file-prompt-handler-functions))
            :buffer stdout
            :sentinel #'ignore
            :stderr stderr)))
@@ -206,7 +206,7 @@
           (cl-loop repeat 2
                    do (process-send-eof sops))
           (with-current-buffer stdout
-            (cl-loop ;; repeat 3 
+            (cl-loop repeat 3 
              while (process-live-p sops)
              do (accept-process-output sops 1)))
           (if (equal (process-exit-status sops) 0)
@@ -235,7 +235,7 @@
             (apply 'call-process-region
                    from
                    to
-                   sops-file-executable
+                   (funcall sops-file-executable)
                    t
                    t
                    nil

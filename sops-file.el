@@ -136,6 +136,16 @@
   :group 'sops-file
   :type 'function)
 
+(defcustom sops-file-decryption-filter
+  (lambda (process output)
+    (save-excursion
+      (goto-char (point-max))
+      (insert output))
+    (run-hook-with-args-until-success 'sops-file-prompt-handler-functions))
+  "Filter used for prompt handling."
+  :group 'sops-file
+  :type 'function)
+
 (defun sops-file-enable ()
   (unless (memq 'sops-file buffer-file-format)
     (format-decode-buffer 'sops-file)))
@@ -200,8 +210,7 @@
                       ,(funcall sops-file-name-inferrer)
                       "--output"
                       "/dev/stderr")
-           :filter (lambda (_ _)
-                     (run-hook-with-args-until-success 'sops-file-prompt-handler-functions))
+           :filter sops-file-decryption-filter
            :buffer stdout
            :sentinel #'ignore
            :stderr stderr)))
@@ -213,7 +222,7 @@
           (cl-loop repeat 2
                    do (process-send-eof sops))
           (with-current-buffer stdout
-            (cl-loop repeat 3 
+            (cl-loop repeat 10
              while (process-live-p sops)
              do (accept-process-output sops 1)))
           (if (and

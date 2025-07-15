@@ -63,7 +63,7 @@
   :group 'sops-file
   :type 'function)
 
-(defcustom sops-file-error-renderer
+(defcustom sops-file-decryption-error-renderer
   (lambda (stderr-buf)
     (let* ((stdout-buf (current-buffer))
            (sops-process (get-buffer-process stdout-buf))
@@ -72,7 +72,7 @@
         (let ((buffer-read-only nil))
           (erase-buffer)
           (when process-hanging
-            (insert "sops-file.el: Process timed out with possibly unhandled prompts, stdout output follows\n")
+            (insert "sops-file.el: Process is hanging with possibly unhandled prompts, stdout output follows\n")
             (insert-buffer-substring stdout-buf)
             (insert "\nsops-file.el: stderr output follows\n"))
           (insert-buffer-substring stderr-buf)))
@@ -225,7 +225,7 @@
                 (funcall sops-file-mode-inferrer))
             (save-excursion
               (with-current-buffer stdout
-                (funcall sops-file-error-renderer stderr)))))
+                (funcall sops-file-decryption-error-renderer stderr)))))
       (progn
         (kill-buffer stdout)
         (kill-buffer stderr))))

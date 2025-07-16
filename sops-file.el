@@ -115,7 +115,7 @@
             (response
              (or
               ;; (and sops-file-skip-unavailable-smartcards "2")
-              (string (read-char-from-minibuffer prompt (list ?1 ?2))))))
+              (string (read-char-choice prompt (list ?1 ?2))))))
       (not (process-send-string sops response))))
 
 (defcustom sops-file-prompt-handler-functions

@@ -200,55 +200,59 @@
 (defun sops-file-decode (from to)
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding of buffer"))
-  (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
-         (stderr (generate-new-buffer " *sops-file-stderr*" t))
-         (sops
-          (make-process
-           :name "sops"
-           :command `(,@(and sops-file-disable-pinentry
-                             ;; we deliberately set to the empty string to trigger a parse
-                             ;; error in the gopgagent library sops uses
-                             '("env" "GPG_AGENT_INFO=''"))
-                      "sops"
-                      ,@(funcall sops-file-decrypt-args)
-                      "--filename-override"
-                      ,(funcall sops-file-name-inferrer)
-                      "--output"
-                      "/dev/stderr")
-           :buffer stdout
-           :sentinel #'ignore
-           :stderr stderr)))
-    (unwind-protect
+  (if (or (= from to)
+          (memq 'sops-file buffer-file-format))
+      ;; nothing to decode
+      (point-max)
+    (let* ((stdout (generate-new-buffer " *sops-file-stdout*" t))
+           (stderr (generate-new-buffer " *sops-file-stderr*" t))
+           (sops
+            (make-process
+             :name "sops"
+             :command `(,@(and sops-file-disable-pinentry
+                               ;; we deliberately set to the empty string to trigger a parse
+                               ;; error in the gopgagent library sops uses
+                               '("env" "GPG_AGENT_INFO=''"))
+                        "sops"
+                        ,@(funcall sops-file-decrypt-args)
+                        "--filename-override"
+                        ,(funcall sops-file-name-inferrer)
+                        "--output"
+                        "/dev/stderr")
+             :buffer stdout
+             :sentinel #'ignore
+             :stderr stderr)))
+      (unwind-protect
+          (progn
+            (set-process-sentinel (get-buffer-process stderr) #'ignore)
+            ;; change functions have been more reliable than a custom process filter
+            (with-current-buffer stdout
+              (add-hook 'after-change-functions sops-file-decryption-prompt-handler nil t))
+            (process-send-region sops from to)
+            ;; for empty .sops.yaml files, sops hangs if we don't send two EOFs
+            (cl-loop repeat 2
+                     do (process-send-eof sops))
+            (with-current-buffer stdout
+              (cl-loop repeat 10
+                       while (process-live-p sops)
+                       do (accept-process-output sops 1)))
+            (if (and
+                 (equal (process-exit-status sops) 0)
+                 (not (process-live-p sops)))
+                (progn
+                  (erase-buffer)
+                  (insert-buffer-substring stderr)
+                  (funcall sops-file-mode-inferrer))
+              (save-excursion
+                (with-current-buffer stdout
+                  (funcall sops-file-decryption-error-renderer stderr)))))
         (progn
-          (set-process-sentinel (get-buffer-process stderr) #'ignore)
-          ;; change functions have been more reliable than a custom process filter
-          (with-current-buffer stdout
-            (add-hook 'after-change-functions sops-file-decryption-prompt-handler nil t))
-          (process-send-region sops from to)
-          ;; for empty .sops.yaml files, sops hangs if we don't send two EOFs
-          (cl-loop repeat 2
-                   do (process-send-eof sops))
-          (with-current-buffer stdout
-            (cl-loop repeat 10
-             while (process-live-p sops)
-             do (accept-process-output sops 1)))
-          (if (and
-               (equal (process-exit-status sops) 0)
-               (not (process-live-p sops)))
-              (progn
-                (erase-buffer)
-                (insert-buffer-substring stderr)
-                (funcall sops-file-mode-inferrer))
-            (save-excursion
-              (with-current-buffer stdout
-                (funcall sops-file-decryption-error-renderer stderr)))))
-      (progn
-        ;; in normal scenarios it's already dead, in unhandled prompt scenarios it won't be
-        (ignore-errors
-          (kill-process sops))
-        (kill-buffer stdout)
-        (kill-buffer stderr))))
-  (point-max))
+          ;; in normal scenarios it's already dead, in unhandled prompt scenarios it won't be
+          (ignore-errors
+            (kill-process sops))
+          (kill-buffer stdout)
+          (kill-buffer stderr)))
+      (point-max))))
 
 (defun sops-file-encode (from to orig-buf)
   ;; manipulating the output buffer directly
@@ -274,6 +278,8 @@
             (buffer-string))))
     (erase-buffer)
     (insert transformed)
+    ;; unsure why the format infrastructure does not remove the format
+    (setq buffer-file-format (cl-remove 'sops-file buffer-file-format))
     (point-max)))
 
 (provide 'sops-file)

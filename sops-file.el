@@ -151,6 +151,16 @@
   :group 'sops-file
   :type 'function)
 
+(defcustom sops-file-decryption-process-manager
+  (lambda ()
+    (let ((sops (get-buffer-process (current-buffer))))
+      (cl-loop repeat 10
+               while (process-live-p sops)
+               do (accept-process-output sops 1))))
+  "Holds up the decode call for any interactive portions to take place (e.g. pins, passphrases, yubikey touches, network calls). Called in sops' buffer."
+  :group 'sops-file
+  :type 'function)
+
 (defun sops-file-enable ()
   (unless (memq 'sops-file buffer-file-format)
     (format-decode-buffer 'sops-file)))
@@ -233,9 +243,7 @@
             (cl-loop repeat 2
                      do (process-send-eof sops))
             (with-current-buffer stdout
-              (cl-loop repeat 10
-                       while (process-live-p sops)
-                       do (accept-process-output sops 1)))
+              (funcall sops-file-decryption-process-manager))
             (if (and
                  (equal (process-exit-status sops) 0)
                  (not (process-live-p sops)))

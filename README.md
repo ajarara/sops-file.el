@@ -1,6 +1,8 @@
 # sops-file.el
 A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey).
 
+[sops-file-demo.webm](https://github.com/user-attachments/assets/1a3aeb5f-9f99-43c3-ba67-017fd9db6128)
+
 # Requirements
 - sops minimum version 3.10.2 (latest as of 5/20/25)
   - needed for https://github.com/getsops/sops/pull/1400

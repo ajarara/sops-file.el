@@ -117,9 +117,18 @@
               (string (read-char-choice prompt (list ?1 ?2))))))
       (not (process-send-string sops response))))
 
+(defun sops-file--prompt-handler-passphrase-identity ()
+  (if-let* ((_ (re-search-forward "Enter passphrase for identity.*" nil t))
+            (prompt (match-string 0))
+            (sops (get-buffer-process (current-buffer)))
+            (passwd (read-passwd prompt))
+            (response (format "%s\n" passwd)))
+      (not (process-send-string sops response))))
+
 (defcustom sops-file-prompt-handler-functions
   `(sops-file--prompt-handler-yubikey-pin
-    sops-file--prompt-handler-yubikey-insert)
+    sops-file--prompt-handler-yubikey-insert
+    sops-file--prompt-handler-passphrase-identity)
   "Sops may repeatedly prompt for additional information during the decryption pass. Users should manipulate this list of functions to handle prompts for their specific scenario. For any successful prompt handling, simply place the point past the full text of the prompt and return t (for run-hook-with-args-until-success to stop)."
   :group 'sops-file
   :type 'hook)

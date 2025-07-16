@@ -56,9 +56,12 @@
 
 (defcustom sops-file-mode-inferrer
   (lambda ()
-    (let ((buffer-file-name
-           (string-replace ".enc" "" buffer-file-name)))
-      (normal-mode)))
+    ;; we post this because we want it to run _after_ the format has been applied, so that we don't attempt to sops decrypt on re-entry of the hook
+    (run-at-time 0 nil
+                 (lambda ()
+                   (let ((buffer-file-name
+                          (string-replace ".enc" "" (funcall sops-file-name-inferrer))))
+                     (normal-mode)))))
   "Manipulate the mode of the file after decoding it"
   :group 'sops-file
   :type 'function)
@@ -165,21 +168,20 @@
   (unless (memq 'sops-file buffer-file-format)
     (format-decode-buffer 'sops-file)))
 
-(defcustom sops-file-entry-trigger
-  (lambda ()
+(defun sops-file-entry-trigger ()
     ;; a fresh file with the right name should trigger sops-file format application
     ;; but more generally, we can query sops filestatus to determine eligibility of format application
-    (let ((sops-file-name (funcall sops-file-name-inferrer)))
-      (when (or (string-match sops-file-auto-mode-regex sops-file-name)
-                (and
-                 (file-exists-p sops-file-name)
-                 (with-temp-buffer
-                   (save-excursion
-                     (call-process (funcall sops-file-executable nil (current-buffer) nil "filestatus" sops-file-name)))
-                   ;; if not managed we get :json-false instead of nil, which is truthy
-                   (eq t (alist-get 'encrypted (json-read-object)))))))
-      (sops-file-enable)))
-  "`sops-file-auto-mode' uses this to determine whether to apply the sops-file format.")
+  (let ((sops-file-name (funcall sops-file-name-inferrer)))
+    (when (or (string-match sops-file-auto-mode-regex sops-file-name)
+              (and
+               (file-exists-p sops-file-name)
+               (with-temp-buffer
+                 (save-excursion
+                   (call-process (funcall sops-file-executable nil (current-buffer) nil "filestatus" sops-file-name)))
+                 ;; if not managed we get :json-false instead of nil, which is truthy
+                 (eq t (alist-get 'encrypted (json-read-object)))))))
+    (sops-file-enable)))
+
 
 (define-minor-mode sops-file-auto-mode
   "Global minor mode for installing hooks. If yaml-mode is available, add a hook to decrypt on entry of any yaml file if sops can decrypt it. Additionally register an auto-mode-alist entry"

@@ -133,10 +133,11 @@
   :type 'function)
 
 (defcustom sops-file-decryption-prompt-handler
-  (lambda (beg _ _)
-    (save-excursion
-      (goto-char beg)
-      (run-hook-with-args-until-success 'sops-file-prompt-handler-functions)))
+  (lambda (beg end _)
+    ;; we do this to counteract the default behavior of the standard filter moving up point to process-mark
+    (when (= (point) (point-max))
+      (goto-char beg))
+    (run-hook-with-args-until-success 'sops-file-prompt-handler-functions))
   "Installed as a buffer local hook for a sops decryption pass to handle any prompts."
   :group 'sops-file
   :type 'function)

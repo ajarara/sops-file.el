@@ -99,9 +99,8 @@
 
 ;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L182
 (defun sops-file--prompt-handler-yubikey-pin ()
-  (if-let* ((prev-point (point))
-            (curr-point (re-search-forward "Enter pin for.*" nil t))
-            (prompt (buffer-substring prev-point curr-point))
+  (if-let* ((_ (re-search-forward "Enter pin for.*" nil t))
+            (prompt (match-string 0))
             (sops (get-buffer-process (current-buffer)))
             (passwd (read-passwd prompt))
             (response (format "%s
@@ -110,14 +109,13 @@
 
 ;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L171
 (defun sops-file--prompt-handler-yubikey-insert ()
-  (if-let* ((prev-point (point))
-            (curr-point (re-search-forward "Please insert.*" nil t))
-            (prompt (buffer-substring prev-point curr-point))
+  (if-let* ((_ (re-search-forward "Please insert.*" nil t))
+            (prompt (match-string 0))
             (sops (get-buffer-process (current-buffer)))
             (response
              (or
-              (and sops-file-skip-unavailable-smartcards "2")
-              (string (read-char-exclusive prompt (list "1" "2"))))))
+              ;; (and sops-file-skip-unavailable-smartcards "2")
+              (string (read-char-from-minibuffer prompt (list ?1 ?2))))))
       (not (process-send-string sops response))))
 
 (defcustom sops-file-prompt-handler-functions

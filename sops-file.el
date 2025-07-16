@@ -103,8 +103,7 @@
             (prompt (match-string 0))
             (sops (get-buffer-process (current-buffer)))
             (passwd (read-passwd prompt))
-            (response (format "%s
-" passwd)))
+            (response (format "%s\n" passwd)))
       (not (process-send-string sops response))))
 
 ;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L171
@@ -114,7 +113,7 @@
             (sops (get-buffer-process (current-buffer)))
             (response
              (or
-              ;; (and sops-file-skip-unavailable-smartcards "2")
+              (and sops-file-skip-unavailable-smartcards "2")
               (string (read-char-choice prompt (list ?1 ?2))))))
       (not (process-send-string sops response))))
 
@@ -133,13 +132,12 @@
   :group 'sops-file
   :type 'function)
 
-(defcustom sops-file-decryption-filter
-  (lambda (process output)
+(defcustom sops-file-decryption-prompt-handler
+  (lambda (beg _ _)
     (save-excursion
-      (goto-char (point-max))
-      (insert output))
-    (run-hook-with-args-until-success 'sops-file-prompt-handler-functions))
-  "Filter used for prompt handling."
+      (goto-char beg)
+      (run-hook-with-args-until-success 'sops-file-prompt-handler-functions)))
+  "Installed as a buffer local hook for a sops decryption pass to handle any prompts."
   :group 'sops-file
   :type 'function)
 
@@ -207,13 +205,15 @@
                       ,(funcall sops-file-name-inferrer)
                       "--output"
                       "/dev/stderr")
-           :filter sops-file-decryption-filter
            :buffer stdout
            :sentinel #'ignore
            :stderr stderr)))
     (unwind-protect
         (progn
           (set-process-sentinel (get-buffer-process stderr) #'ignore)
+          ;; change functions have been more reliable than a custom process filter
+          (with-current-buffer stdout
+            (add-hook 'after-change-functions sops-file-decryption-prompt-handler nil t))
           (process-send-region sops from to)
           ;; for empty .sops.yaml files, sops hangs if we don't send two EOFs
           (cl-loop repeat 2
@@ -234,8 +234,8 @@
                 (funcall sops-file-decryption-error-renderer stderr)))))
       (progn
         ;; in normal scenarios it's already dead, in unhandled prompt scenarios it won't be
-        ;; (ignore-errors
-        ;;   (kill-process sops))
+        (ignore-errors
+          (kill-process sops))
         (kill-buffer stdout)
         (kill-buffer stderr))))
   (point-max))

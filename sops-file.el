@@ -72,7 +72,7 @@
         (let ((buffer-read-only nil))
           (erase-buffer)
           (when process-hanging
-            (insert "sops-file.el: Process is hanging with possibly unhandled prompts, stdout output follows\n")
+            (insert "sops-file.el: Process is hanging with possibly unhandled prompts. Write a prompt handler to handle these, and consider upstreaming for your use case.\nsops-file.el: stdout output follows\n")
             (insert-buffer-substring stdout-buf)
             (insert "\nsops-file.el: stderr output follows\n"))
           (insert-buffer-substring stderr-buf))

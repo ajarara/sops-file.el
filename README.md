@@ -7,7 +7,7 @@ A package for viewing + editing [sops](https://github.com/getsops/sops) files. I
 - env (for disabling pinentry)
 - minimum emacs version unknown
 
-# Installation
+# Installation / Quick Start
 Using straight.el:
 ``` emacs-lisp
 (use-package sops-file
@@ -16,7 +16,11 @@ Using straight.el:
   :after yaml-mode  ;; yaml-mode is optional
   :config
   ;; adds an auto-mode-alist entry and yaml-mode hooks if yaml-mode is installed
-  (sops-file-auto-mode 1))
+  (sops-file-auto-mode 1)
+  ;; for age-plugin-yubikey users with multiple yubikeys, if a card isn't detected from your 
+  ;; identity file sops will prompt you to insert it or skip it.
+  ;; by default sops-file will skip these unavailable cards -- set this to nil to be prompted
+  (setq sops-file-skip-unavailable-smartcards nil))
 ```
 
 After we cut a version we'll be on melpa{-stable}.
@@ -31,7 +35,11 @@ Users are welcome to attach `sops-file-entry-trigger` to any major mode hook the
 Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on any path. Provided there is a creation_rule for that path, the contents will never hit disk decrypted.
 
 # API
-Users shouldn't need to integrate with sops-file through writing code: for now it exposes no hooks and integrates with emacs directly. The public API should be thought of as:
+Sops integrates with a diverse array of encryption providers: age, age-on-yubikeys, pgp, external KMS. sops-file.el simply ferries prompts between the decryption process and the user, however some glue code is needed to support a given setup. This is the primary place users should expect to write code: when sops encounters a prompt it cannot handle, it will hang for a bit until it fails and spit out the prompt in a dedicated error buffer.
+
+Look to the existing prompt-handlers, namely `sops-file--prompt-handler-passphrase-identity` -- the important thing is to advance point past the prompt. It is generally correct to not use a save excursion: if the user gets prompted and quits out, then we assume it deliberate (at which point the process is killed and decryption fails).
+
+Users shouldn't need to integrate with sops-file through writing non-prompt-handling code. The public API should be thought of as:
 - the sops-file format registration (which happens on load)
 - `sops-file-auto-mode`
 - `sops-file-entry-trigger` (not a hook itself)
@@ -39,12 +47,10 @@ Users shouldn't need to integrate with sops-file through writing code: for now i
 
 # Roadmap
 Before claiming a stable 1.0, we're going to wait for more users beyond me. There are a couple features I know that need to be implemented for a comprehensive experience: 
-- Keygroup handling: sops can ask multiple times for passphrases for a single decryption pass
-  - if you use age exclusively, setup is convoluted and might not even work: sops supports only one identity file, and that identity file cannot be encrypted with multiple passphrases. So maybe an armored SOPS_AGE_KEY environment variable?
 - confirmed, tested pgp support: 
-  - looking at source pgp follows the same logic as age: lean on gpg-agent to request the passphrase (age uses gpg-agent as well, if available). If no connection can be made, read it directly from stdin. Gpg has many more moving parts over age, so an isolated test is going to be more complex. But in theory it should work fine, with graphical pinentry or with no daemon (non-graphical pinentry will not work).
-- tramp support: as of now, none known. I remember there are some caveats towards remote shell commands and having to mix in stderr/stdout, which would be really annoying here.
-- confirmed support for external KMS providers
+  - looking at source pgp follows the same logic as age: lean on gpg-agent to request the passphrase (sops uses gpg-agent as well, if available). If no connection can be made, read it directly from stdin. Gpg has many more moving parts over age, so an isolated test is going to be more complex. But in theory it should work fine, with graphical pinentry or with no daemon (in my tests non-graphical pinentry doesn't work).
+- tramp support: as of now, none known. I remember there are some caveats towards remote shell commands and having to mix in stderr/stdout, which could be difficult to handle here.
+- support for external KMS providers (testing will be difficult)
 
 
 ## dubious directions

@@ -1,5 +1,5 @@
 # sops-file.el
-A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey).
+A package for viewing + editing [sops](https://github.com/getsops/sops) files. It handles sops pin prompts, I wrote this particularly to handle pin-guarded [age](https://github.com/FiloSottile/age/) keys [stored on yubikeys](https://github.com/str4d/age-plugin-yubikey). It also handles age keys guarded by passphrases, plus can be extended to support any KMS that sops prompts for.
 
 [sops-file-demo.webm](https://github.com/user-attachments/assets/1a3aeb5f-9f99-43c3-ba67-017fd9db6128)
 
@@ -30,30 +30,29 @@ After we cut a version we'll be on melpa{-stable}.
 # Usage
 Without any configuration, users can simply do `M-x format-find-file`, select the file, then select format `sops-file`. Users can also, when visiting a file literally, `M-x format-decode-buffer` and select `sops-file` as the format.
 
-`sops-file-auto-mode` is a global minor mode that attaches a hook to yaml-mode and installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not). If creation rules are lax, then sops-file will consider any yaml file as a sops file and will apply the format!
+`sops-file-auto-mode` is a global minor mode that attaches a trigger to the [yaml-mode](https://github.com/yoshiki/yaml-mode) mode hook (if yaml-mode is loaded) and also installs an entry into auto-mode-alist, so that regular `M-x find-file`s apply the format (whether yaml-mode is installed or not).
 
-Users are welcome to attach `sops-file-entry-trigger` to any major mode hook they like: if sops-file determines that this file is managed, sops-file will attempt to apply the format encoding. On decyption failure we write to `*sops-file-error*`.
+Users are welcome to attach `sops-file-entry-trigger` to any major mode hook they like: if sops-file determines that this file is encrypted by sops, sops-file will attempt to apply the format encoding. On decyption failure we write to `*sops-file-error*`.
 
 Users can also use this to create sops files for the first time, simply do `M-x format-find-file` on any path. Provided there is a creation_rule for that path, the contents will never hit disk decrypted.
 
 # API
-Sops integrates with a diverse array of encryption providers: age, age-on-yubikeys, pgp, external KMS. sops-file.el simply ferries prompts between the decryption process and the user, however some glue code is needed to support a given setup. This is the primary place users should expect to write code: when sops encounters a prompt it cannot handle, it will hang for a bit until it fails and spit out the prompt in a dedicated error buffer.
+Sops integrates with a diverse array of encryption providers: age, age-on-yubikeys, pgp, external KMS. sops-file.el mostly ferries prompts between the decryption process and the user, however some glue code is needed to support each encryption method. This is the primary place users should expect to write code against sops-file (if at all): when sops encounters a prompt it cannot handle, it will hang for a bit until it fails and spit out the prompt in a `*sops-file-error*`.
 
-Look to the existing prompt-handlers, namely `sops-file--prompt-handler-passphrase-identity` -- the important thing is to advance point past the prompt. It is generally correct to not use a save excursion: if the user gets prompted and quits out, then we assume it deliberate (at which point the process is killed and decryption fails).
+Look to the existing prompt-handlers, namely `sops-file--prompt-handler-passphrase-identity` -- the important thing is to advance point past the prompt.
 
 Users shouldn't need to integrate with sops-file through writing non-prompt-handling code. The public API should be thought of as:
 - the sops-file format registration (which happens on load)
 - `sops-file-auto-mode`
-- `sops-file-entry-trigger` (not a hook itself)
+- `sops-file-entry-trigger` (to be added to any relevant hooks)
 - defcustoms defined in the sops-file group
 
 # Roadmap
-Before claiming a stable 1.0, we're going to wait for more users beyond me. There are a couple features I know that need to be implemented for a comprehensive experience: 
+Before claiming a stable 1.0, we're going to wait for more users and bug reports. There are a couple features I know that need to be implemented for a comprehensive experience: 
 - confirmed, tested pgp support: 
   - looking at source pgp follows the same logic as age: lean on gpg-agent to request the passphrase (sops uses gpg-agent as well, if available). If no connection can be made, read it directly from stdin. Gpg has many more moving parts over age, so an isolated test is going to be more complex. But in theory it should work fine, with graphical pinentry or with no daemon (in my tests non-graphical pinentry doesn't work).
-- tramp support: as of now, none known. I remember there are some caveats towards remote shell commands and having to mix in stderr/stdout, which could be difficult to handle here.
+- tramp support: as of now, none known. I remember there are some caveats towards remote shell commands and having to mix in stderr/stdout, which could be difficult to handle here, given we rely on dedicated outputs for prompt handling and cleartext retrieval.
 - support for external KMS providers (testing will be difficult)
-
 
 ## dubious directions
 What follows are things that I think would be useful, but would probably mean compromises to the complexity of the code as is or would be difficult to test. Your comments are welcome on these (or anything else related to this project for that matter), as issues.

@@ -30,27 +30,39 @@
 
 ;;; Code:
 (require 'cl-lib)
+(require 'json)
 
 (defgroup sops-file nil
-  "Transparently manipulate SOPS files"
+  "Transparently manipulate SOPS files."
   :prefix 'sops-file
   :group 'convenience)
 
 (defcustom sops-file-executable
   (cl-constantly "sops")
-  "The sops executable we use to encrypt and decrypt. Called in the buffer we are formatting."
+  "The sops executable we use to encrypt and decrypt.
+Called in the buffer we are formatting."
   :group 'sops-file
   :type 'function)
 
 (defcustom sops-file-decrypt-args
   (cl-constantly '("decrypt"))
-  "Decrypt arguments for sops. Called in the buffer we are formatting, where the text is still encrypted."
+  "Decrypt arguments for sops.
+Called in the buffer we are formatting, where the text is still encrypted."
   :group 'sops-file
   :type 'function)
 
 (defcustom sops-file-encrypt-args
   (cl-constantly '("encrypt"))
-  "Encrypt arguments for sops. Called in the buffer we are formatting, where the text is decrypted."
+  "Encrypt arguments for sops.
+Called in the buffer we are formatting, where the text is decrypted."
+  :group 'sops-file
+  :type 'function)
+
+(defcustom sops-file-name-inferrer
+  (lambda ()
+    (or buffer-file-name
+        (buffer-name)))
+  "Infer file name based off the current buffer."
   :group 'sops-file
   :type 'function)
 
@@ -62,7 +74,7 @@
                    (let ((buffer-file-name
                           (string-replace ".enc" "" (funcall sops-file-name-inferrer))))
                      (normal-mode)))))
-  "Manipulate the mode of the file after decoding it"
+  "Manipulate the mode of the file after decoding it."
   :group 'sops-file
   :type 'function)
 
@@ -86,12 +98,14 @@
   :type 'function)
 
 (defcustom sops-file-auto-mode-regex "\\.enc\\.\\(e?ya?\\|ra\\)ml\\'"
-  "Files that we attempt to automatically decrypt. If yaml-mode is available, depending on load ordering, this might be shadowed by yaml-mode's entry, in which case the hook should suffice."
+  "Files that we attempt to automatically decrypt.
+If yaml-mode is available, depending on load ordering, this might be shadowed by
+yaml-mode's entry, in which case the hook should suffice."
   :group 'sops-file
   :type 'regexp)
 
 (defcustom sops-file-disable-pinentry nil
-  "Have sops prompt for pin directly instead of delegating to pinentry. Counterintuitively, you should set this especially if you use pinentry-tty instead of graphical pinentry, since sops falls back to reading stdin with a prompt instead of delegating to pinentry-tty which immediately fails in a subprocess."
+  "Have sops prompt for pin directly instead of delegating to pinentry."
   :group 'sops-file
   :type 'boolean)
 
@@ -102,6 +116,7 @@
 
 ;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L182
 (defun sops-file--prompt-handler-yubikey-pin ()
+  "Handles yubikey pin prompt."
   (if-let* ((_ (re-search-forward "Enter pin for.*" nil t))
             (prompt (match-string 0))
             (sops (get-buffer-process (current-buffer)))
@@ -111,6 +126,7 @@
 
 ;; https://github.com/str4d/age-plugin-yubikey/blob/v0.5.0/i18n/en-US/age_plugin_yubikey.ftl#L171
 (defun sops-file--prompt-handler-yubikey-insert ()
+  "Handles yubikey pin insertion prompt."
   (if-let* ((_ (re-search-forward "Please insert.*" nil t))
             (prompt (match-string 0))
             (sops (get-buffer-process (current-buffer)))
@@ -121,6 +137,7 @@
       (not (process-send-string sops response))))
 
 (defun sops-file--prompt-handler-passphrase-identity ()
+  "Handles encrypted age identity passphrase prompt."
   (if-let* ((_ (re-search-forward "Enter passphrase for identity.*" nil t))
             (prompt (match-string 0))
             (sops (get-buffer-process (current-buffer)))
@@ -132,25 +149,22 @@
   `(sops-file--prompt-handler-yubikey-pin
     sops-file--prompt-handler-yubikey-insert
     sops-file--prompt-handler-passphrase-identity)
-  "Sops may repeatedly prompt for additional information during the decryption pass. Users should manipulate this list of functions to handle prompts for their specific scenario. For any successful prompt handling, simply place the point past the full text of the prompt and return t (for run-hook-with-args-until-success to stop)."
+  "Sops may repeatedly prompt for additional information during a decryption.
+Users should manipulate this list of functions to handle prompts for
+their specific scenario.  For any successful prompt handling, simply
+place the point past the full text of the prompt and return t (for
+`run-hook-with-args-until-success' to stop)."
   :group 'sops-file
   :type 'hook)
 
-(defcustom sops-file-name-inferrer
-  (lambda ()
-    (or buffer-file-name
-        buffer-name))
-  "Infer file name based off the current buffer."
-  :group 'sops-file
-  :type 'function)
 
 (defcustom sops-file-decryption-prompt-handler
-  (lambda (beg end _)
+  (lambda (beg _ _)
     ;; we do this to counteract the default behavior of the standard filter moving up point to process-mark
     (when (= (point) (point-max))
       (goto-char beg))
     (run-hook-with-args-until-success 'sops-file-prompt-handler-functions))
-  "Installed as a buffer local hook for a sops decryption pass to handle any prompts."
+  "Installed as a buffer local hook for a decryption pass to handle any prompts."
   :group 'sops-file
   :type 'function)
 
@@ -160,17 +174,22 @@
       (cl-loop repeat 10
                while (process-live-p sops)
                do (accept-process-output sops 1))))
-  "Holds up the decode call for any interactive portions to take place (e.g. pins, passphrases, yubikey touches, network calls). Called in sops' buffer."
+  "Holds up the decode call for any interactive portions to take place.
+For example pins, passphrases, yubikey touches, network calls, pinentry.
+Called in sops' buffer."
   :group 'sops-file
   :type 'function)
 
 (defun sops-file-enable ()
+  "Used as an entry point for `sops-file-auto-mode' and `sops-file-entry-trigger'."
   (unless (memq 'sops-file buffer-file-format)
     (format-decode-buffer 'sops-file)))
 
 (defun sops-file-entry-trigger ()
-    ;; a fresh file with the right name should trigger sops-file format application
-    ;; but more generally, we can query sops filestatus to determine eligibility of format application
+  "A function that can be generally placed on any hook.
+This determines whether to apply the sops-file format."
+  ;; a fresh file with the right name should trigger sops-file format application
+  ;; but more generally, we can query sops filestatus to determine eligibility of format application
   (let ((sops-file-name (funcall sops-file-name-inferrer)))
     (when (or (string-match sops-file-auto-mode-regex sops-file-name)
               (and
@@ -179,12 +198,13 @@
                  (save-excursion
                    (call-process (funcall sops-file-executable nil (current-buffer) nil "filestatus" sops-file-name)))
                  ;; if not managed we get :json-false instead of nil, which is truthy
-                 (eq t (alist-get 'encrypted (json-read-object)))))))
-    (sops-file-enable)))
-
+                 (eq t (alist-get 'encrypted (json-read-object))))))
+      (sops-file-enable))))
 
 (define-minor-mode sops-file-auto-mode
-  "Global minor mode for installing hooks. If yaml-mode is available, add a hook to decrypt on entry of any yaml file if sops can decrypt it. Additionally register an auto-mode-alist entry"
+  "Global minor mode for installing hooks.
+If yaml-mode is available, add a hook to decrypt on entry of any yaml file
+if sops can decrypt it.  Additionally register an `auto-mode-alist' entry"
   :global t
   :group 'sops-file
   (cond ((null sops-file-auto-mode)
@@ -214,6 +234,10 @@
  format-alist)
 
 (defun sops-file-decode (from to)
+  "The decode portion of the sops file format.
+We require FROM to be point-min and TO to be point-max, as sops does not
+expect sops ciphertext to be embedded in larger cleartext (excepting partial
+decryption, which is handled by sending everything over anyway."
   (unless (and (equal from (point-min)) (equal to (point-max)))
     (error "Cannot handle partial decoding of buffer"))
   (if (or (= from to)
@@ -269,13 +293,15 @@
       (point-max))))
 
 (defun sops-file-encode (from to orig-buf)
+  "The encode version of the sops-file format.
+At the end of the encryption pass, we completely replace the contents
+of ORIG-BUF with the results.  We require FROM to be point-min and TO
+to be point-max, as the decode portion does with the same reasoning"
+  (unless (and (equal from (point-min)) (equal to (point-max)))
+    (error "Cannot handle partial decoding of buffer"))
   ;; manipulating the output buffer directly
   ;; has proven pretty unreliable, this works reliably
-  (let* ((output-buffer (current-buffer))
-         ;; save-current-buffer mucks with default-directory in tests,
-         ;; and presumably callers can use it so peek default-directory
-         ;; off the original buffer
-         (default-directory (with-current-buffer orig-buf default-directory))
+  (let* ((default-directory (with-current-buffer orig-buf default-directory))
          (transformed
           (with-temp-buffer
             (insert-buffer-substring orig-buf)

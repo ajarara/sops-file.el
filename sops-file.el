@@ -5,7 +5,7 @@
 ;; Author:  Ahmad Jarara <ajarara@fastmail.com>
 ;; Keywords: convenience, programming
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "28.1"))
+;; Package-Requires: ((emacs "29.1"))
 ;; Homepage: http://github.com/ajarara/sops-file.el
 ;; Keywords: convenience files tools sops encrypt decrypt
 
@@ -201,6 +201,7 @@ This determines whether to apply the sops-file format."
                  (eq t (alist-get 'encrypted (json-read-object))))))
       (sops-file-enable))))
 
+;;;###autoload
 (define-minor-mode sops-file-auto-mode
   "Global minor mode for installing hooks.
 If yaml-mode is available, add a hook to decrypt on entry of any yaml file
@@ -209,8 +210,8 @@ if sops can decrypt it.  Additionally register an `auto-mode-alist' entry"
   :group 'sops-file
   (cond ((null sops-file-auto-mode)
          (if (fboundp 'yaml-mode)
-           (remove-hook 'yaml-mode-hook
-                        #'sops-file-entry-trigger)
+             (remove-hook 'yaml-mode-hook
+                          #'sops-file-entry-trigger)
            (setq auto-mode-alist
                  (cl-delete-if
                   (lambda (entry)
@@ -218,8 +219,8 @@ if sops can decrypt it.  Additionally register an `auto-mode-alist' entry"
                   auto-mode-alist))))
         (t
          (if (fboundp 'yaml-mode)
-           (add-hook 'yaml-mode-hook
-                     #'sops-file-entry-trigger)
+             (add-hook 'yaml-mode-hook
+                       #'sops-file-entry-trigger)
            (add-to-list 'auto-mode-alist `(,sops-file-auto-mode-regex . sops-file-enable))))))
 
 ;; we don't remove these on sops-file-auto-mode disable

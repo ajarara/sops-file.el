@@ -7,7 +7,7 @@ A package for viewing + editing [sops](https://github.com/getsops/sops) files. I
 - sops minimum version 3.10.2 (latest as of 5/20/25)
   - needed for https://github.com/getsops/sops/pull/1400
 - env (for disabling pinentry)
-- minimum emacs version unknown
+- emacs minimum 29.1
 
 # Installation / Quick Start
 Using straight.el:
